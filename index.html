@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="CoDices 是一个面向 TRPG 模组作者的在线 Markdown 编辑器：左边写作，右边实时生成可交互、可导出的单文件 H5。"
+    />
+    <meta name="theme-color" content="#f7f1e7" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <title>CoDices · TRPG 模组工坊</title>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('CoDices:ui-theme');
+          var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var theme = saved === 'light' || saved === 'dark' ? saved : dark ? 'dark' : 'light';
+          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.style.colorScheme = theme;
+          var themeColor = document.querySelector('meta[name="theme-color"]');
+          if (themeColor) themeColor.setAttribute('content', theme === 'dark' ? '#1c1814' : '#f7f1e7');
+        } catch (error) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="app" id="app" data-view="split">
+      <header class="app-header">
+        <div class="brand" aria-label="CoDices">
+          <span class="brand-mark" data-icon="scroll" data-icon-size="23"></span>
+          <span class="brand-text">
+            <strong>CoDices</strong>
+            <small>TRPG 模组工坊</small>
+          </span>
+        </div>
+
+        <div class="doc-chip" title="当前模组">
+          <span class="doc-dot" aria-hidden="true"></span>
+          <span class="doc-identity">
+            <span class="doc-title" id="doc-title">未命名模组</span>
+            <span class="doc-system" id="doc-system">Markdown → 交互式 H5</span>
+          </span>
+          <span class="save-state" id="save-state">已自动保存</span>
+        </div>
+
+        <div class="view-switch" role="group" aria-label="视图模式">
+          <button class="view-button" data-view="editor" type="button" title="仅源码 (Alt+1)">
+            <span data-icon="panel-left"></span><span class="view-label">源码</span>
+          </button>
+          <button class="view-button is-active" data-view="split" type="button" title="分栏 (Alt+2)">
+            <span data-icon="columns"></span><span class="view-label">分栏</span>
+          </button>
+          <button class="view-button" data-view="preview" type="button" title="仅预览 (Alt+3)">
+            <span data-icon="panel-right"></span><span class="view-label">预览</span>
+          </button>
+        </div>
+
+        <div class="header-actions">
+          <button class="btn btn-ghost" id="btn-guide" type="button" title="语法速查 (Ctrl+/)">
+            <span data-icon="help"></span><span class="btn-label">语法</span>
+          </button>
+          <button class="btn btn-ghost" id="btn-restore" type="button" title="恢复上一份本机备份" hidden>
+            <span data-icon="history"></span><span class="btn-label">恢复</span>
+          </button>
+          <button class="btn btn-ghost" id="btn-sample" type="button" title="载入内置示例">
+            <span data-icon="sparkles"></span><span class="btn-label">示例</span>
+          </button>
+          <button class="btn btn-ghost" id="btn-new" type="button" title="新建空白模组">
+            <span data-icon="file-plus"></span><span class="btn-label">新建</span>
+          </button>
+          <button class="btn btn-ghost" id="btn-open" type="button" title="打开 Markdown (Ctrl+O)">
+            <span data-icon="folder-open"></span><span class="btn-label">打开</span>
+          </button>
+          <button class="btn btn-ghost" id="btn-save" type="button" title="保存 Markdown (Ctrl+S)">
+            <span data-icon="save"></span><span class="btn-label">保存</span>
+          </button>
+          <button class="btn btn-primary" id="btn-export" type="button" title="导出单文件 H5 (Ctrl+Shift+E)">
+            <span data-icon="download"></span><span class="btn-label">导出 H5</span>
+          </button>
+          <button class="icon-button" id="btn-theme" type="button" title="切换明暗主题" aria-label="切换明暗主题">
+            <span data-icon="moon"></span>
+          </button>
+        </div>
+      </header>
+
+      <main class="workspace" id="workspace">
+        <section class="pane editor-pane" id="editor-pane" aria-label="Markdown 源码">
+          <div class="workspace-bar">
+            <div class="workspace-tools workspace-tools-left" role="group" aria-label="源码工具">
+              <div class="insert-wrap">
+                <button class="tool-button tool-button-accent" id="btn-insert" type="button" aria-haspopup="menu" aria-expanded="false">
+                  <span data-icon="plus"></span><span class="tool-label">插入</span><span data-icon="chevron" data-icon-size="13" class="caret"></span>
+                </button>
+                <div class="menu" id="insert-menu" role="menu" aria-label="插入模组元素" hidden>
+                  <div class="menu-head">
+                    <span>插入模组元素</span>
+                    <kbd>@</kbd>
+                  </div>
+                  <div class="menu-list" id="insert-menu-list"></div>
+                </div>
+              </div>
+              <span class="tool-sep" aria-hidden="true"></span>
+              <button class="tool-button tool-icon" id="btn-bold" type="button" title="粗体 (Ctrl+B)" aria-label="粗体">
+                <span data-icon="bold"></span>
+              </button>
+              <button class="tool-button tool-icon" id="btn-italic" type="button" title="斜体 (Ctrl+I)" aria-label="斜体">
+                <span data-icon="italic"></span>
+              </button>
+              <button class="tool-button tool-icon" id="btn-code" type="button" title="行内代码" aria-label="行内代码">
+                <span data-icon="code"></span>
+              </button>
+              <button class="tool-button tool-icon" id="btn-xref" type="button" title="插入交叉引用" aria-label="插入交叉引用">
+                <span data-icon="link"></span>
+              </button>
+            </div>
+            <div class="workspace-tools workspace-tools-right" role="group" aria-label="预览工具">
+            <button class="tool-button tool-icon" id="btn-refresh" type="button" title="重新编译预览" aria-label="重新编译预览">
+              <span data-icon="refresh"></span>
+            </button>
+            <button class="tool-button tool-icon" id="btn-device" type="button" title="切换手机宽度预览" aria-label="切换手机宽度预览" aria-pressed="false">
+              <span data-icon="smartphone"></span>
+            </button>
+            <button class="tool-button" id="btn-popout" type="button" title="在新窗口打开预览">
+              <span data-icon="external"></span><span class="tool-label">新窗口</span>
+            </button>
+          </div>
+        </div>
+          <div class="editor-host" id="editor-host"></div>
+        </section>
+
+        <div
+          class="splitter"
+          id="splitter"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="调整编辑区宽度"
+          tabindex="0"
+        >
+          <span class="splitter-grip" aria-hidden="true"></span>
+        </div>
+
+        <section class="pane preview-pane" id="preview-pane" aria-label="H5 实时预览">
+          <div class="preview-stage" id="preview-stage">
+            <div class="preview-frame-wrap" id="preview-frame-wrap">
+              <iframe
+                id="preview-frame"
+                title="模组实时预览"
+                sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+                allow="clipboard-write"
+              ></iframe>
+              <div class="preview-error" id="preview-error" hidden>
+                <span data-icon="alert" data-icon-size="20"></span>
+                <div>
+                  <strong>预览暂时无法生成</strong>
+                  <pre id="preview-error-text"></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="statusbar">
+        <div class="status-group">
+          <span id="cursor-status">行 1，列 1</span>
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="char-status">0 字</span>
+        </div>
+        <div class="status-group status-stats" id="stats-status">
+          <span><b id="stat-headings">0</b> 章节</span>
+          <span><b id="stat-blocks">0</b> 宣读 / 提示</span>
+          <span><b id="stat-clues">0</b> 线索</span>
+          <span><b id="stat-entities">0</b> 角色</span>
+        </div>
+        <div class="status-group status-right">
+          <button class="issues-button" id="issues-status" type="button" title="跳到第一个未解析引用" hidden>
+            <span data-icon="alert" data-icon-size="13"></span>
+            <span id="issues-text">0 个未解析引用</span>
+          </button>
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="storage-status">草稿已保存到本机</span>
+          <div class="mobile-view-switch" role="group" aria-label="移动端视图">
+            <button type="button" data-view="editor" class="is-active"><span data-icon="panel-left"></span>源码</button>
+            <button type="button" data-view="preview"><span data-icon="panel-right"></span>预览</button>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <dialog class="guide-dialog" id="guide-dialog" aria-labelledby="guide-title">
+      <div class="dialog-head">
+        <div>
+          <span class="dialog-kicker">CoDices syntax</span>
+          <h2 id="guide-title">TRPG 模组语法速查</h2>
+          <p>源码保持可读的纯 Markdown；导出后自动叠加折叠、复制、悬浮预览与交叉跳转。</p>
+        </div>
+        <button class="icon-button" id="btn-guide-close" type="button" title="关闭" aria-label="关闭语法速查">
+          <span data-icon="x"></span>
+        </button>
+      </div>
+      <div class="dialog-body">
+        <div class="guide-grid" id="guide-grid"></div>
+        <section class="shortcut-section">
+          <h3>常用快捷键</h3>
+          <div class="shortcut-grid">
+            <span><kbd>Ctrl</kbd><kbd>S</kbd> 保存 Markdown</span>
+            <span><kbd>Ctrl</kbd><kbd>O</kbd> 打开文件</span>
+            <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>E</kbd> 导出 H5</span>
+            <span><kbd>Ctrl</kbd><kbd>/</kbd> 语法速查</span>
+            <span><kbd>Ctrl</kbd><kbd>B</kbd> 粗体</span>
+            <span><kbd>Ctrl</kbd><kbd>I</kbd> 斜体</span>
+            <span><kbd>Alt</kbd><kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> 切换视图</span>
+            <span>输入 <kbd>@</kbd> 自动补全标签</span>
+          </div>
+        </section>
+      </div>
+    </dialog>
+
+    <div class="toast-host" id="toast-host" aria-live="polite" aria-atomic="true"></div>
+
+    <div class="drop-overlay" id="drop-overlay" aria-hidden="true">
+      <div class="drop-card">
+        <span data-icon="upload" data-icon-size="30"></span>
+        <strong>松开以打开 Markdown</strong>
+        <small>支持 .md / .markdown / .txt</small>
+      </div>
+    </div>
+
+    <input type="file" id="file-input" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden />
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
