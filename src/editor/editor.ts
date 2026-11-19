@@ -40,6 +40,12 @@ export interface CursorInfo {
   selected: number;
 }
 
+export interface EditorScrollState {
+  ratio: number;
+  /** Fractional 0-based source line at the top of the viewport. */
+  line: number;
+}
+
 export interface EditorOptions {
   value: string;
   dark: boolean;
@@ -56,6 +62,14 @@ export interface ScenarioEditor {
   setDiagnostics(diagnostics: Diagnostic[]): void;
   focus(): void;
   scrollToTop(): void;
+  getScrollRatio(): number;
+  scrollToRatio(ratio: number): void;
+  /** Fractional 0-based source line at the top of the viewport. */
+  getScrollLine(): number;
+  getLineCount(): number;
+  /** Scroll so `fromLine`..`toLine` is interpolated at `progress` (0-1). */
+  scrollToLine(fromLine: number, toLine: number, progress: number): void;
+  onScroll(listener: (state: EditorScrollState) => void): () => void;
   toggleBold(): void;
   toggleItalic(): void;
 }
@@ -150,6 +164,42 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Scena
   const view = new EditorView({ state, parent });
   options.onCursor(cursorInfo(view.state));
 
+  const getScrollRatio = (): number => {
+    const element = view.scrollDOM;
+    const max = element.scrollHeight - element.clientHeight;
+    return max > 0 ? element.scrollTop / max : 0;
+  };
+
+  const getScrollLine = (): number => {
+    const element = view.scrollDOM;
+    const height = Math.max(0, element.getBoundingClientRect().top - view.documentTop);
+    const limit = Math.max(0, view.contentHeight - 1);
+    const block = view.lineBlockAtHeight(Math.min(height, limit));
+    const line = view.state.doc.lineAt(block.from);
+    const fraction = block.height > 0
+      ? Math.max(0, Math.min(0.9999, (height - block.top) / block.height))
+      : 0;
+    return line.number - 1 + fraction;
+  };
+
+  const scrollToLine = (fromLine: number, toLine: number, progress: number): void => {
+    const state = view.state;
+    const clampLine = (line: number): number => (
+      Math.max(0, Math.min(state.doc.lines - 1, Math.floor(line)))
+    );
+    const from = clampLine(fromLine);
+    const to = clampLine(toLine);
+    const fromTop = view.lineBlockAt(state.doc.line(from + 1).from).top;
+    let target = fromTop;
+    if (to > from) {
+      const toTop = view.lineBlockAt(state.doc.line(to + 1).from).top;
+      const bounded = Math.max(0, Math.min(1, progress));
+      target += (toTop - fromTop) * bounded;
+    }
+    const offset = view.scrollDOM.getBoundingClientRect().top - view.documentTop;
+    view.scrollDOM.scrollTop += target - offset;
+  };
+
   return {
     view,
     getValue: () => view.state.doc.toString(),
@@ -171,6 +221,25 @@ export function createEditor(parent: HTMLElement, options: EditorOptions): Scena
     },
     focus: () => view.focus(),
     scrollToTop: () => view.dispatch({ selection: { anchor: 0 }, scrollIntoView: true }),
+    getScrollRatio,
+    scrollToRatio(ratio: number) {
+      const element = view.scrollDOM;
+      const max = element.scrollHeight - element.clientHeight;
+      if (max <= 0) return;
+      const bounded = Math.max(0, Math.min(1, ratio));
+      element.scrollTop = bounded * max;
+    },
+    getScrollLine,
+    getLineCount: () => view.state.doc.lines,
+    scrollToLine,
+    onScroll(listener: (state: EditorScrollState) => void) {
+      const element = view.scrollDOM;
+      const handler = (): void => {
+        listener({ ratio: getScrollRatio(), line: getScrollLine() });
+      };
+      element.addEventListener('scroll', handler, { passive: true });
+      return () => element.removeEventListener('scroll', handler);
+    },
     toggleBold: () => {
       wrapSelection(view, '**', '**', '粗体');
     },

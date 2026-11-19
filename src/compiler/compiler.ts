@@ -58,8 +58,20 @@ function trunc(text: string, limit = PREVIEW_LIMIT): string {
   return trimmed.length > limit ? `${trimmed.slice(0, limit)}……` : trimmed;
 }
 
+/** Number of complete lines removed from `source` to produce `body`. */
+function prefixLineCount(source: string, body: string): number {
+  let lines = 0;
+  const limit = source.length - body.length;
+  for (let i = 0; i < limit; i += 1) {
+    if (source.charCodeAt(i) === 10) lines += 1;
+  }
+  return lines;
+}
+
 interface BlockMetaBase {
   entry: TagEntry;
+  /** Compact label for the block header; the type badge already names the kind. */
+  shortLabel: string;
   copy: string;
   preview: string;
 }
@@ -108,6 +120,20 @@ export interface HeadingInfo {
   title: string;
 }
 
+/**
+ * A source location that also exists as a DOM element in the compiled page.
+ *
+ * The editor/preview scroll bridge uses these anchors to translate a source
+ * line into a rendered position (and back) instead of trusting the global
+ * scroll ratio. `line` is 0-based and includes any front-matter lines.
+ */
+export interface AnchorInfo {
+  line: number;
+  id: string;
+  /** Heading level (1-6), or 0 for a generated block. */
+  level: number;
+}
+
 export interface CompileStats {
   headings: number;
   aloud: number;
@@ -130,6 +156,7 @@ export interface CompiledDocument {
   unresolved: string[];
   tagKeys: TagKeyInfo[];
   headings: HeadingInfo[];
+  anchors: AnchorInfo[];
   stats: CompileStats;
 }
 
@@ -217,6 +244,9 @@ class Compiler {
   private currentHeadingTitle = '';
 
   private headings: HeadingInfo[] = [];
+  private anchors: AnchorInfo[] = [];
+  /** Line count of the stripped front matter, so anchors use full-source lines. */
+  private lineOffset = 0;
   private readonly headingMeta = new Map<Token, HeadingMeta>();
   private readonly fenceMeta = new Map<Token, FenceMeta>();
   private readonly blockquoteMeta = new Map<Token, BlockquoteMeta>();
@@ -236,6 +266,7 @@ class Compiler {
 
   compile(source: string): CompiledDocument {
     const [meta, body] = splitFrontmatter(source);
+    this.lineOffset = prefixLineCount(source, body);
     const tokens = this.md.parse(body, this.env);
 
     this.registerPass(tokens);
@@ -260,6 +291,7 @@ class Compiler {
       unresolved: [...this.unresolved].sort(),
       tagKeys: this.registry.keys(),
       headings: this.headings,
+      anchors: [...this.anchors].sort((a, b) => a.line - b.line),
       stats: {
         headings: this.headings.length,
         aloud: this.aloudCount,
@@ -324,6 +356,11 @@ class Compiler {
     this.registry.register(entry);
     this.headingMeta.set(openToken, { level, id, title });
     this.headings.push({ level, id, title });
+    this.anchors.push({
+      line: this.lineOffset + (openToken.map?.[0] ?? 0),
+      id,
+      level,
+    });
 
     if (title.startsWith('地点：') || title.startsWith('地点:')) {
       const locationTitle = title.split('：').slice(-1)[0].split(':').slice(-1)[0].trim();
@@ -415,6 +452,7 @@ class Compiler {
       this.fenceMeta.set(token, {
         kind: 'aloud',
         entry,
+        shortLabel: `#${number}${tag ? ` · ${tag}` : ''}`,
         copy: token.content,
         preview,
       });
@@ -433,8 +471,18 @@ class Compiler {
       this.fenceMeta.set(token, {
         kind: 'handout',
         entry,
+        shortLabel: tag || `#${this.handoutCount}`,
         copy: token.content,
         preview: entry.preview,
+      });
+    }
+
+    const registered = this.fenceMeta.get(token);
+    if (registered) {
+      this.anchors.push({
+        line: this.lineOffset + (token.map?.[0] ?? 0),
+        id: registered.entry.targetId,
+        level: 0,
       });
     }
   }
@@ -477,8 +525,16 @@ class Compiler {
     this.blockquoteMeta.set(openToken, {
       kind,
       entry,
+      shortLabel: kind === 'kp_notice'
+        ? `#${entry.number}${tag ? ` · ${tag}` : ''}`
+        : name || tag || `#${entry.number}`,
       copy: this.blockquoteCopy(inlineTokens),
       preview: entry.preview,
+    });
+    this.anchors.push({
+      line: this.lineOffset + (openToken.map?.[0] ?? 0),
+      id: entry.targetId,
+      level: 0,
     });
   }
 
@@ -659,16 +715,15 @@ class Compiler {
 
   private renderFenceBlock(meta: FenceMeta, token: Token): string {
     const { entry } = meta;
-    const label = escapeHtml(entry.label);
     const copySource = escapeAttr(meta.copy);
 
     if (meta.kind === 'aloud') {
       return (
-        `<section class="block aloud-block" id="${escapeAttr(entry.targetId)}" `
+        `<section class="block aloud-block" id="${escapeAttr(entry.targetId)}" data-sync-anchor `
         + `data-copy-src="${copySource}" data-name="${escapeAttr(entry.label)}" data-type="aloud">`
         + '<details><summary>'
         + '<span class="type-badge type-aloud">宣读</span>'
-        + `<span class="block-label">${label}</span>`
+        + `<span class="block-label">${escapeHtml(meta.shortLabel)}</span>`
         + `<span class="block-preview">${escapeHtml(meta.preview)}</span>`
         + '<button class="copy-btn" type="button">复制</button></summary>'
         + `<pre class="aloud-content">${escapeHtml(token.content)}</pre>`
@@ -677,11 +732,11 @@ class Compiler {
     }
 
     return (
-      `<section class="block handout-block" id="${escapeAttr(entry.targetId)}" `
+      `<section class="block handout-block" id="${escapeAttr(entry.targetId)}" data-sync-anchor `
       + `data-copy-src="${copySource}" data-name="${escapeAttr(entry.label)}" data-type="handout">`
       + '<details open><summary>'
       + '<span class="type-badge type-handout">Handout</span>'
-      + `<span class="block-label">${label}</span>`
+      + `<span class="block-label">${escapeHtml(meta.shortLabel)}</span>`
       + '<button class="copy-btn" type="button">复制</button></summary>'
       + `<pre class="handout-content">${escapeHtml(token.content)}</pre>`
       + '</details></section>'
@@ -696,11 +751,11 @@ class Compiler {
 
     if (kind === 'kp_notice') {
       return (
-        `<section class="keeper" id="${escapeAttr(entry.targetId)}" `
+        `<section class="keeper" id="${escapeAttr(entry.targetId)}" data-sync-anchor `
         + `data-copy-src="${copySource}" data-name="${name}" data-type="kp_notice">`
         + '<details open><summary class="keeper-head">'
         + '<span class="keeper-label">守密人提示</span>'
-        + `<span class="block-label">${escapeHtml(entry.label)}</span>`
+        + `<span class="block-label">${escapeHtml(meta.shortLabel)}</span>`
         + '<button class="copy-btn" type="button">复制</button></summary>'
         + `<div class="keeper-body">${content}</div>`
         + '</details></section>'
@@ -714,11 +769,11 @@ class Compiler {
     };
     const badge = badgeByKind[kind] ?? ['NPC', 'type-npc'];
     return (
-      `<section class="entity ${badge[1]}-entity" id="${escapeAttr(entry.targetId)}" `
+      `<section class="entity ${badge[1]}-entity" id="${escapeAttr(entry.targetId)}" data-sync-anchor `
       + `data-copy-src="${copySource}" data-name="${name}" data-type="${kind}">`
       + '<details open><summary class="entity-head">'
       + `<span class="type-badge ${badge[1]}">${badge[0]}</span>`
-      + `<span class="block-label">${escapeHtml(entry.label)}</span>`
+      + `<span class="block-label">${escapeHtml(meta.shortLabel)}</span>`
       + '<button class="copy-btn" type="button">复制</button></summary>'
       + `<div class="entity-body">${content}</div>`
       + '</details></section>'
@@ -727,14 +782,15 @@ class Compiler {
 
   private renderBlockquoteContent(inlineTokens: Token[]): string {
     return this.blockquoteContentChunks(inlineTokens)
-      .map((chunk) => this.renderInline(chunk))
-      .join('\n\n');
+      .filter((chunk) => this.plain(chunk).trim().length > 0)
+      .map((chunk) => `<p>${this.renderInline(chunk, true)}</p>`)
+      .join('\n');
   }
 
   // ------------------------------------------------------------------ //
   // Inline rendering
   // ------------------------------------------------------------------ //
-  private renderInline(children: Token[]): string {
+  private renderInline(children: Token[], softbreakAsBreak = false): string {
     const out: string[] = [];
     let i = 0;
     while (i < children.length) {
@@ -768,7 +824,7 @@ class Compiler {
           `<img class="handout-img" src="${escapeAttr(src)}" alt="${escapeAttr(token.content)}">`,
         );
       } else if (type === 'softbreak') {
-        out.push('\n');
+        out.push(softbreakAsBreak ? '<br>\n' : '\n');
       } else if (type === 'hardbreak') {
         out.push('<br>\n');
       } else if (type === 'html_inline') {
@@ -857,7 +913,7 @@ class Compiler {
     const headingTag = `h${node.level}`;
     const head = (
       '<div class="chapter-head">'
-      + `<${headingTag} id="${escapeAttr(node.id)}">${node.titleHtml}</${headingTag}>`
+      + `<${headingTag} id="${escapeAttr(node.id)}" data-sync-anchor>${node.titleHtml}</${headingTag}>`
       + '<button class="fold-toggle" type="button" aria-label="折叠章节" aria-expanded="true">'
       + '<span class="fold-chevron" aria-hidden="true">▾</span>'
       + '</button>'
@@ -880,32 +936,26 @@ class Compiler {
       + '<button id="toc-expand" type="button">全部展开</button>'
       + '<button id="toc-collapse" type="button">全部折叠</button></div>'
     );
-    const groups = toc.map((node) => this.renderTocGroup(node)).join('');
-    return `${actions}${groups}<a class="toc-link" href="#index-top">索引</a>`;
+    const groups = toc.map((node) => this.renderTocNode(node, 0)).join('');
+    return `${actions}${groups}<a class="toc-link toc-depth-0" style="--toc-depth:0" href="#index-top">索引</a>`;
   }
 
-  private renderTocGroup(node: ChapterNode): string {
+  private renderTocNode(node: ChapterNode, depth: number): string {
     const children = node.children.filter(
       (child): child is ChapterNode => child.kind === 'chapter',
     );
-    if (!children.length) {
-      return `<a class="toc-link" href="#${escapeAttr(node.id)}">${escapeHtml(node.title)}</a>`;
-    }
-    const links = children.map((child) => this.renderTocLeaf(child)).join('');
-    return (
-      `<details class="toc-details" open><summary>${escapeHtml(node.title)}</summary>`
-      + `${links}</details>`
-    );
-  }
+    const level = Math.min(depth, 5);
+    const depthStyle = `--toc-depth:${level}`;
+    const classes = `toc-depth-${level}`;
 
-  private renderTocLeaf(node: ChapterNode): string {
-    const parts = [
-      `<a class="toc-link" href="#${escapeAttr(node.id)}">${escapeHtml(node.title)}</a>`,
-    ];
-    for (const child of node.children) {
-      if (child.kind === 'chapter') parts.push(this.renderTocLeaf(child));
+    if (!children.length) {
+      return `<a class="toc-link ${classes}" style="${depthStyle}" `
+        + `href="#${escapeAttr(node.id)}">${escapeHtml(node.title)}</a>`;
     }
-    return parts.join('');
+
+    const links = children.map((child) => this.renderTocNode(child, depth + 1)).join('');
+    return `<details class="toc-details ${classes}" style="${depthStyle}" open>`
+      + `<summary>${escapeHtml(node.title)}</summary>${links}</details>`;
   }
 
   // ------------------------------------------------------------------ //

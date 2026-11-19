@@ -50,6 +50,55 @@ describe('headings', () => {
     const ids = new UniqueIds();
     expect([ids.make('x'), ids.make('x'), ids.make('x')]).toEqual(['x', 'x-2', 'x-3']);
   });
+
+  it('nests multi-layer sidebar chapters', () => {
+    const doc = compileScenario('# Book\n\n## Part\n\n### Sub\n\n#### Leaf\n');
+    expect(doc.sidebarHtml).toContain('class="toc-details toc-depth-0"');
+    expect(doc.sidebarHtml).toContain('class="toc-details toc-depth-1"');
+    expect(doc.sidebarHtml).toContain('class="toc-link toc-depth-2"');
+    expect(doc.sidebarHtml).toContain('--toc-depth:2');
+  });
+});
+
+describe('sync anchors', () => {
+  it('tracks headings and generated blocks in full-source coordinates', () => {
+    const source = [
+      '---',
+      'title: Test',
+      '---',
+      '',
+      '# Chapter {#ch}',
+      '',
+      'text',
+      '',
+      '```aloud [voice]',
+      'hello',
+      '```',
+      '',
+      '> kp_notice [warn]',
+      '> beware',
+      '',
+      '## Sub {#sub}',
+      '',
+      '```handout [letter]',
+      'note',
+      '```',
+    ].join('\n');
+    const doc = compileScenario(source);
+    expect(doc.anchors).toEqual([
+      { line: 4, id: 'ch', level: 1 },
+      { line: 8, id: 'aloud-1', level: 0 },
+      { line: 12, id: 'kp-1', level: 0 },
+      { line: 15, id: 'sub', level: 2 },
+      { line: 17, id: 'handout-1', level: 0 },
+    ]);
+  });
+
+  it('marks each anchor in the generated body for preview discovery', () => {
+    const doc = compileScenario('# Chapter {#ch}\n\n```aloud\nhi\n```\n');
+    expect(doc.bodyHtml).toContain('<h1 id="ch" data-sync-anchor>');
+    expect(doc.bodyHtml).toContain('id="aloud-1" data-sync-anchor');
+  });
 });
 
 describe('cross references', () => {
@@ -105,21 +154,33 @@ describe('TRPG blocks', () => {
   it('renders keeper notices', () => {
     const doc = compileScenario('> kp_notice [warn]\n> beware\n');
     expect(doc.bodyHtml).toContain('class="keeper"');
-    expect(doc.bodyHtml).toContain('守密人提示 #1');
+    expect(doc.bodyHtml).toContain('class="keeper-label">守密人提示</span>');
+    expect(doc.bodyHtml).toContain('<span class="block-label">#1 · warn</span>');
     expect(doc.bodyHtml).toContain('beware');
+  });
+
+  it('keeps derived blockquote paragraphs and line breaks', () => {
+    const doc = compileScenario('> kp_notice\n> 第一行\n> 第二行\n>\n> 第二段\n');
+    expect(doc.bodyHtml).toContain('<p>第一行<br>');
+    expect(doc.bodyHtml).toContain('第二行</p>');
+    expect(doc.bodyHtml).toContain('<p>第二段</p>');
+    expect(doc.bodyHtml).not.toContain('第一行\n第二行</p>');
   });
 
   it('renders NPC blocks with names as tags', () => {
     const doc = compileScenario('> NPC：教授 [prof]\n> note\n');
     expect(doc.bodyHtml).toContain('type-npc-entity');
-    expect(doc.bodyHtml).toContain('NPC·教授');
+    expect(doc.bodyHtml).toContain('data-name="NPC·教授"');
+    expect(doc.bodyHtml).toContain('<span class="block-label">教授</span>');
     expect(doc.tagKeys.map((tag) => tag.key)).toContain('教授');
   });
 
   it('renders monsters and enemies', () => {
     const doc = compileScenario('> Mob：潜藏者 [lurker]\n> stats\n\n> 敌人：猎犬\n> stats\n');
-    expect(doc.bodyHtml).toContain('Mob·潜藏者');
-    expect(doc.bodyHtml).toContain('敌人·猎犬');
+    expect(doc.bodyHtml).toContain('data-name="Mob·潜藏者"');
+    expect(doc.bodyHtml).toContain('data-name="敌人·猎犬"');
+    expect(doc.bodyHtml).toContain('<span class="block-label">潜藏者</span>');
+    expect(doc.bodyHtml).toContain('<span class="block-label">猎犬</span>');
     expect(doc.stats.entities).toBe(2);
   });
 
@@ -138,7 +199,8 @@ describe('TRPG blocks', () => {
   it('renders handouts', () => {
     const doc = compileScenario('```handout [letter]\nhello\n```\n');
     expect(doc.bodyHtml).toContain('handout-block');
-    expect(doc.bodyHtml).toContain('Handout·letter');
+    expect(doc.bodyHtml).toContain('data-name="Handout·letter"');
+    expect(doc.bodyHtml).toContain('<span class="block-label">letter</span>');
   });
 
   it('skips compile directives', () => {
@@ -168,6 +230,18 @@ describe('generated page', () => {
     expect(html).toContain('::-webkit-scrollbar-thumb');
     expect(html).toContain('--scrollbar:#c7b8a2');
     expect(html).toContain('--scrollbar:#463c31');
+  });
+
+  it('ships both narrow-screen sidebar entry points and anchor scroll sync', () => {
+    const html = renderPage(compileScenario('# Hi\n'));
+    expect(html).toContain('id="sidebar-hotzone"');
+    expect(html).toContain('id="sidebar-fab"');
+    expect(html).toContain('CoDices:scrollToAnchor');
+    expect(html).toContain('data-sync-anchor');
+    expect(html).toContain('@media (max-width:1000px)');
+    expect(html).toContain('.sidebar-fab{display:inline-flex');
+    // The hotzone must not be hidden again at the phone breakpoint.
+    expect(html).not.toContain('.sidebar-hotzone{display:none}');
   });
 
   it('builds sidebar, index and stats', () => {

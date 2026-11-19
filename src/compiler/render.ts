@@ -85,15 +85,43 @@ img{max-width:100%}
 .sidebar-actions button:hover{color:var(--accent);border-color:var(--accent)}
 .toc-details{margin:.35rem 0}
 .toc-details summary{cursor:pointer;font-weight:bold;color:var(--accent);
-  font-size:.8rem;letter-spacing:.04em;list-style:none;padding:.15rem .3rem;user-select:none}
+  font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei","Heiti SC",sans-serif;
+  font-size:.8rem;letter-spacing:.04em;list-style:none;user-select:none;
+  padding:.15rem .3rem .15rem calc(.3rem + var(--toc-depth,0) * .7rem)}
 .toc-details summary::-webkit-details-marker{display:none}
 .toc-details summary::before{content:'▸ ';display:inline-block;transition:transform .15s}
 .toc-details[open] summary::before{transform:rotate(90deg)}
 .toc-details summary:hover{background:var(--hover-bg)}
-.toc-link{display:block;padding:.12rem .3rem .12rem 1.1rem;color:var(--ink);text-decoration:none;
-  border-left:2px solid transparent;font-size:.85rem}
+.toc-link{display:block;color:var(--ink);text-decoration:none;
+  border-left:2px solid transparent;font-size:.85rem;
+  padding:.12rem .3rem .12rem calc(.3rem + var(--toc-depth,0) * .7rem)}
 .toc-link:hover{color:var(--accent);border-left-color:var(--accent);background:var(--hover-bg)}
 main{flex:1;padding:1.5rem 2rem;max-width:900px;min-width:0}
+
+/* ---- narrow-screen sidebar drawer ---- */
+.sidebar-fab,.sidebar-hotzone,.sidebar-backdrop{display:none}
+@media (max-width:1000px){
+  .sidebar{position:fixed;top:50px;left:0;bottom:0;z-index:40;width:min(300px,86vw);
+    min-width:0;overflow:hidden;border-right:1px solid var(--line);
+    box-shadow:6px 0 24px rgba(0,0,0,.22);transform:translateX(-100%);
+    transition:transform .2s ease}
+  .sidebar.is-open{transform:translateX(0)}
+  .sidebar-inner{position:static;max-height:none;height:100%;padding-top:1.2rem}
+  .sidebar-hotzone{display:block;position:fixed;left:0;top:50px;bottom:0;width:10%;
+    z-index:35;padding:0;border:0;background:transparent;cursor:pointer}
+  .sidebar-hotzone:focus-visible{outline:2px solid var(--keeper-border);outline-offset:-4px}
+  .sidebar-fab{display:inline-flex;position:fixed;left:12px;bottom:14px;z-index:41;
+    align-items:center;gap:.4rem;padding:.55rem .85rem;border-radius:999px;
+    border:1px solid var(--topbar-border);background:var(--topbar-bg);color:var(--topbar-fg);
+    box-shadow:0 4px 14px var(--shadow);font-family:inherit;font-size:.8rem;cursor:pointer}
+  .sidebar-fab:hover{background:var(--topbar-hover)}
+  body.sidebar-open{overflow:hidden}
+  body.sidebar-open .sidebar-fab{border-color:var(--accent);color:var(--accent)}
+  .sidebar-backdrop{display:block;position:fixed;left:0;right:0;top:50px;bottom:0;z-index:39;
+    background:rgba(20,14,9,.34);opacity:0;visibility:hidden;pointer-events:none;
+    transition:opacity .2s ease,visibility .2s}
+  body.sidebar-open .sidebar-backdrop{opacity:1;visibility:visible;pointer-events:auto}
+}
 
 /* ---- hero ---- */
 .hero{background:var(--card);border:1px solid var(--line);border-radius:8px;
@@ -132,13 +160,14 @@ main th{background:var(--thead-bg)}
   background:transparent;color:var(--muted);cursor:pointer;font-size:.8rem;padding:0 4px;
   font-family:inherit}
 .fold-toggle:hover{color:var(--accent)}
-.fold-chevron{display:inline-block;line-height:1;transition:transform .2s ease}
+.fold-chevron{display:inline-block;line-height:1;font-size:1.5rem;transition:transform .2s ease}
 .chapter.collapsed .fold-chevron{transform:rotate(-90deg)}
 
 /* ---- type badges ---- */
 .type-badge{display:inline-block;font-size:.64rem;font-weight:bold;color:#fff;
   padding:.1rem .5rem;border-radius:10px;vertical-align:middle;letter-spacing:.05em;
-  text-transform:uppercase;margin-right:.3rem;flex:0 0 auto}
+  text-transform:uppercase;margin-right:.3rem;flex:0 0 auto;
+  font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei","Heiti SC",sans-serif}
 .type-npc{background:#7a3b1f}.type-location{background:#2d7a4f}
 .type-clue{background:#5b3b8a}.type-myth{background:#a02020}
 .type-aloud{background:#286068}.type-handout{background:#555}
@@ -173,6 +202,7 @@ a.xref:hover{background:var(--ref-hover);border-bottom-style:solid}
 .keeper details>summary::-webkit-details-marker{display:none}
 .keeper-head{display:flex;align-items:center;gap:8px;padding:.3rem .6rem .2rem .4rem}
 .keeper-label{display:inline-block;background:var(--keeper-border);color:#3a2c00;
+  font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei","Heiti SC",sans-serif;
   font-size:.66rem;font-weight:bold;letter-spacing:.06em;text-transform:uppercase;
   padding:.12rem .5rem;border-radius:0 0 6px 0;flex:0 0 auto}
 .keeper .block-label{font-weight:bold}
@@ -186,6 +216,8 @@ a.xref:hover{background:var(--ref-hover);border-bottom-style:solid}
 .entity details>summary::-webkit-details-marker{display:none}
 .entity-head{display:flex;align-items:center;gap:8px;padding:.5rem .8rem;border-bottom:1px solid var(--line)}
 .entity .block-label{font-weight:bold}
+.block .block-label,.keeper .block-label,.entity .block-label{
+  font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei","Heiti SC",sans-serif}
 .entity-body{padding:.5rem .9rem .7rem}
 .entity-body p{margin:.35rem 0}
 .type-npc-entity{border-left:4px solid #7a3b1f}
@@ -239,11 +271,9 @@ a.xref:hover{background:var(--ref-hover);border-bottom-style:solid}
     opacity:1!important;visibility:visible!important}
 }
 @media (max-width:760px){
-  .layout{flex-direction:column}
-  .sidebar{position:static;align-self:stretch;width:auto;min-width:0;
-    border-right:0;border-bottom:1px solid var(--line)}
-  .sidebar-inner{position:static;max-height:none;overflow:visible}
-  main{padding:1rem;max-width:none}
+  .layout{display:block}
+  .sidebar{width:min(300px,88vw)}
+  main{padding:1rem 1rem 4.5rem;max-width:none}
   .topbar{gap:.5rem;padding:.6rem .7rem}
   .topbar input#filter{max-width:none;min-width:0}
   .topbar .brand{max-width:45vw;overflow:hidden;text-overflow:ellipsis}
@@ -299,6 +329,18 @@ const SCRIPT = String.raw`
   window.addEventListener("scroll", updateProgress, { passive: true });
   updateProgress();
 
+  // ---- editor scroll-sync anchor cache --------------------------------
+  // Folded chapters, filtered blocks, images and font swaps all change the
+  // vertical geometry used by the editor bridge. Mark it dirty instead of
+  // measuring the whole document on every scroll event.
+  var syncAnchorsDirty = true;
+  function invalidateSyncAnchors() { syncAnchorsDirty = true; }
+  window.addEventListener("resize", invalidateSyncAnchors);
+  window.addEventListener("load", invalidateSyncAnchors, true);
+  if (document.fonts && document.fonts.ready && document.fonts.ready.then) {
+    document.fonts.ready.then(invalidateSyncAnchors);
+  }
+
   // ---- filter --------------------------------------------------------
   var filter = document.getElementById("filter");
   if (filter) filter.addEventListener("input", function () {
@@ -308,6 +350,7 @@ const SCRIPT = String.raw`
       var type = (el.getAttribute("data-type") || "").toLowerCase();
       el.style.display = (!query || name.indexOf(query) >= 0 || type.indexOf(query) >= 0) ? "" : "none";
     });
+    invalidateSyncAnchors();
   });
 
   // ---- toc expand / collapse -----------------------------------------
@@ -320,6 +363,71 @@ const SCRIPT = String.raw`
     document.querySelectorAll(".toc-details").forEach(function (d) { d.open = false; });
   });
 
+  // ---- narrow-screen sidebar drawer -----------------------------------
+  var sidebar = document.getElementById("sidebar");
+  var sidebarFab = document.getElementById("sidebar-fab");
+  var sidebarHotzone = document.getElementById("sidebar-hotzone");
+  var sidebarBackdrop = document.getElementById("sidebar-backdrop");
+  var narrowScreen = window.matchMedia("(max-width: 1000px)");
+  var mobileScreen = window.matchMedia("(max-width: 760px)");
+  var hotzoneTimer = null;
+  var leaveTimer = null;
+  function sidebarIsOpen() {
+    return !!sidebar && sidebar.classList.contains("is-open");
+  }
+  function setSidebar(open) {
+    if (!sidebar) return;
+    sidebar.classList.toggle("is-open", open);
+    document.body.classList.toggle("sidebar-open", open && narrowScreen.matches);
+    sidebar.inert = narrowScreen.matches ? !open : false;
+    if (sidebarFab) {
+      sidebarFab.setAttribute("aria-expanded", open ? "true" : "false");
+      sidebarFab.setAttribute("aria-label", open ? "关闭目录" : "打开目录");
+      sidebarFab.textContent = open ? "✕ 关闭" : "☰ 目录";
+    }
+  }
+  function closeSidebar() { setSidebar(false); }
+
+  if (sidebar) {
+    if (sidebarFab) sidebarFab.addEventListener("click", function () {
+      setSidebar(!sidebarIsOpen());
+    });
+    if (sidebarBackdrop) sidebarBackdrop.addEventListener("click", closeSidebar);
+    if (sidebarHotzone) {
+      sidebarHotzone.addEventListener("mouseenter", function () {
+        clearTimeout(leaveTimer);
+        clearTimeout(hotzoneTimer);
+        hotzoneTimer = setTimeout(function () { setSidebar(true); }, 500);
+      });
+      sidebarHotzone.addEventListener("mouseleave", function () {
+        clearTimeout(hotzoneTimer);
+        if (sidebarIsOpen()) {
+          clearTimeout(leaveTimer);
+          leaveTimer = setTimeout(closeSidebar, 450);
+        }
+      });
+      sidebarHotzone.addEventListener("click", function () { setSidebar(true); });
+      sidebarHotzone.addEventListener("focus", function () { setSidebar(true); });
+    }
+    sidebar.addEventListener("mouseenter", function () { clearTimeout(leaveTimer); });
+    sidebar.addEventListener("mouseleave", function () {
+      if (mobileScreen.matches) return;
+      clearTimeout(leaveTimer);
+      leaveTimer = setTimeout(closeSidebar, 450);
+    });
+    sidebar.addEventListener("click", function (event) {
+      var target = event.target;
+      if (target instanceof Element && target.closest("a.toc-link")) closeSidebar();
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && sidebarIsOpen()) closeSidebar();
+    });
+    if (narrowScreen.addEventListener) {
+      narrowScreen.addEventListener("change", function () { closeSidebar(); });
+    }
+    setSidebar(false);
+  }
+
   // ---- chapter folding -----------------------------------------------
   document.querySelectorAll(".fold-toggle").forEach(function (button) {
     button.addEventListener("click", function () {
@@ -328,7 +436,17 @@ const SCRIPT = String.raw`
       var collapsed = chapter.classList.toggle("collapsed");
       button.setAttribute("aria-expanded", collapsed ? "false" : "true");
       button.setAttribute("aria-label", collapsed ? "展开章节" : "折叠章节");
+      invalidateSyncAnchors();
     });
+  });
+  document.addEventListener("toggle", invalidateSyncAnchors, true);
+  ["transitionend", "transitioncancel"].forEach(function (name) {
+    document.addEventListener(name, function (event) {
+      var target = event.target;
+      if (target instanceof Element && target.classList.contains("chapter-body")) {
+        invalidateSyncAnchors();
+      }
+    }, true);
   });
 
   // ---- copy ----------------------------------------------------------
@@ -537,24 +655,171 @@ const SCRIPT = String.raw`
 
   // ---- sandboxed preview bridge ---------------------------------------
   // When embedded by the editor, keep the parent informed of scrolling and
-  // accept scroll restoration requests. Exported files simply ignore this.
+  // accept scroll restoration / anchor-sync requests. Exported files ignore
+  // this block entirely.
   if (window.parent && window.parent !== window) {
-    function notifyScroll() {
+    var suppressNotifyUntil = 0;
+    var anchorCache = null;
+
+    function maxScroll() {
+      return Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    }
+    function scrollRatio() {
+      var max = maxScroll();
+      return max > 0 ? window.scrollY / max : 0;
+    }
+    function topbarHeight() {
+      var bar = document.querySelector(".topbar");
+      return bar ? Math.max(0, bar.offsetHeight) : 0;
+    }
+    function documentTop(element) {
+      return element.getBoundingClientRect().top + window.scrollY;
+    }
+    // A folded chapter still lays out its body (it is clipped, not removed),
+    // so anchors inside it have meaningless positions. Map them to the
+    // highest collapsed ancestor heading instead of auto-expanding folds.
+    function resolveAnchor(element) {
+      var resolved = element;
+      var node = element;
+      while (node && node !== document.body) {
+        if (
+          node.classList
+          && node.classList.contains("chapter")
+          && node.classList.contains("collapsed")
+        ) {
+          var head = node.firstElementChild;
+          if (head && head.classList.contains("chapter-head") && !head.contains(element)) {
+            var heading = head.querySelector("h1,h2,h3,h4,h5,h6");
+            if (heading && heading.id) resolved = heading;
+          }
+        }
+        node = node.parentElement;
+      }
+      return resolved;
+    }
+    function buildAnchorCache() {
+      var elements = document.querySelectorAll("[data-sync-anchor][id]");
+      var resolved = Object.create(null);
+      var tops = Object.create(null);
+      var seen = Object.create(null);
+      var list = [];
+      Array.prototype.forEach.call(elements, function (element) {
+        var target = resolveAnchor(element);
+        resolved[element.id] = target && target.id ? target.id : null;
+        if (!target || !target.id) return;
+        if (target.getClientRects().length === 0) {
+          tops[target.id] = null;
+          return;
+        }
+        if (seen[target.id]) return;
+        seen[target.id] = true;
+        tops[target.id] = documentTop(target);
+        list.push({ id: target.id, top: tops[target.id] });
+      });
+      list.sort(function (a, b) { return a.top - b.top; });
+      anchorCache = { list: list, resolved: resolved, tops: tops };
+      syncAnchorsDirty = false;
+      return anchorCache;
+    }
+    function getAnchorCache() {
+      if (!anchorCache || syncAnchorsDirty) buildAnchorCache();
+      return anchorCache;
+    }
+    function anchorTop(id) {
+      if (!id) return null;
+      var cache = getAnchorCache();
+      var target = cache.resolved[id];
+      if (!target) return null;
+      var top = cache.tops[target];
+      return typeof top === "number" ? top : null;
+    }
+    function currentAnchorState() {
+      var cache = getAnchorCache();
+      var bar = topbarHeight();
+      var position = window.scrollY + bar;
+      var list = cache.list;
+      var previous = null;
+      var next = null;
+      for (var i = 0; i < list.length; i += 1) {
+        if (list[i].top <= position) previous = list[i];
+        else {
+          next = list[i];
+          break;
+        }
+      }
+      var fromTop = previous ? previous.top : bar;
+      var toTop = next ? next.top : maxScroll() + bar;
+      var progress = toTop > fromTop
+        ? Math.max(0, Math.min(1, (position - fromTop) / (toTop - fromTop)))
+        : 0;
+      return {
+        anchor: previous ? previous.id : null,
+        next: next ? next.id : null,
+        progress: progress
+      };
+    }
+    function postScrollState() {
+      var anchors = currentAnchorState();
       try {
-        window.parent.postMessage({ type: "CoDices:scroll", y: window.scrollY }, "*");
+        window.parent.postMessage({
+          type: "CoDices:scroll",
+          y: window.scrollY,
+          ratio: scrollRatio(),
+          anchor: anchors.anchor,
+          next: anchors.next,
+          progress: anchors.progress
+        }, "*");
       } catch (e) {}
     }
+    function notifyScroll() {
+      if (Date.now() < suppressNotifyUntil) return;
+      postScrollState();
+    }
+    function applyScroll(y) {
+      // Programmatic alignment is a mechanical jump: suppress the automatic
+      // scroll event, then report the final position once so the parent always
+      // knows where to restore the preview after the next compile.
+      suppressNotifyUntil = Date.now() + 90;
+      var previous = root.style.scrollBehavior;
+      root.style.scrollBehavior = "auto";
+      try { window.scrollTo(0, y); } catch (e) {}
+      root.style.scrollBehavior = previous;
+      postScrollState();
+    }
+    function targetScrollY(anchor, next, progress) {
+      var fromTop = anchorTop(anchor);
+      var toTop = anchorTop(next);
+      if (anchor && fromTop === null) return null;
+      if (next && toTop === null) return null;
+      if (!anchor && !next) return null;
+      var bar = topbarHeight();
+      var max = maxScroll();
+      var start = fromTop === null ? bar : fromTop;
+      var end = toTop === null ? max + bar : toTop;
+      var bounded = typeof progress === "number" && isFinite(progress)
+        ? Math.max(0, Math.min(1, progress))
+        : 0;
+      var position = end > start ? start + (end - start) * bounded : start;
+      return Math.max(0, Math.min(max, position - bar));
+    }
+
     window.addEventListener("scroll", notifyScroll, { passive: true });
     window.addEventListener("message", function (event) {
       var data = event.data;
-      if (!data || data.type !== "CoDices:scrollTo" || typeof data.y !== "number") return;
-      // Restoring the reader's place after a compile is a mechanical jump, not
-      // a navigation. Temporarily suppress the page's smooth scrolling so the
-      // preview does not visibly scroll from the top after every edit.
-      var previous = root.style.scrollBehavior;
-      root.style.scrollBehavior = "auto";
-      try { window.scrollTo(0, data.y); } catch (e) {}
-      root.style.scrollBehavior = previous;
+      if (!data) return;
+      if (data.type === "CoDices:scrollTo" && typeof data.y === "number") {
+        applyScroll(data.y);
+      } else if (data.type === "CoDices:scrollToAnchor") {
+        var target = targetScrollY(data.anchor, data.next, data.progress);
+        if (target !== null) {
+          applyScroll(target);
+        } else if (typeof data.ratio === "number") {
+          applyScroll(Math.max(0, Math.min(1, data.ratio)) * maxScroll());
+        }
+      } else if (data.type === "CoDices:scrollToRatio" && typeof data.ratio === "number") {
+        var ratio = Math.max(0, Math.min(1, data.ratio));
+        applyScroll(ratio * maxScroll());
+      }
     });
   }
 })();
@@ -607,12 +872,15 @@ export function renderPage(doc: CompiledDocument, options: RenderOptions = {}): 
 <body>
 <a class="skip-link" href="#content">跳到正文</a>
 <div class="topbar"><div class="brand">${titleEscaped}</div><input id="filter" type="search" placeholder="按名字或类型筛选…" aria-label="筛选内容"><button id="theme-toggle" class="tb-btn" type="button" title="切换明暗主题" aria-label="切换明暗主题">&#9681;</button><div class="reading-progress" aria-hidden="true"><span id="reading-progress-bar"></span></div></div>
-<div class="layout"><aside class="sidebar"><div class="sidebar-inner">${doc.sidebarHtml}</div></aside>
+<button class="sidebar-hotzone" id="sidebar-hotzone" type="button" aria-controls="sidebar" aria-label="打开目录"></button>
+<div class="layout"><aside class="sidebar" id="sidebar"><div class="sidebar-inner">${doc.sidebarHtml}</div></aside>
 <main id="content">
 ${renderHero(doc)}
 ${doc.bodyHtml}
 ${doc.indexHtml}
 </main></div>
+<div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
+<button class="sidebar-fab" id="sidebar-fab" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="打开目录">☰ 目录</button>
 <div id="tooltip" role="tooltip"></div>
 ${scrollScript}
 <script>${SCRIPT}</script>

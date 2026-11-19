@@ -115,6 +115,9 @@
               </button>
             </div>
             <div class="workspace-tools workspace-tools-right" role="group" aria-label="预览工具">
+            <button class="tool-button tool-icon" id="btn-sync" type="button" title="取消滚动同步" aria-label="取消滚动同步" aria-pressed="true">
+              <span data-icon="link"></span>
+            </button>
             <button class="tool-button tool-icon" id="btn-refresh" type="button" title="重新编译预览" aria-label="重新编译预览">
               <span data-icon="refresh"></span>
             </button>
@@ -178,6 +181,10 @@
             <span data-icon="alert" data-icon-size="13"></span>
             <span id="issues-text">0 个未解析引用</span>
           </button>
+          <button class="info-button" id="btn-info" type="button" title="更新日志与关于" aria-label="更新日志与关于">
+            <span data-icon="info" data-icon-size="13"></span>
+            <span>关于</span>
+          </button>
           <span class="status-dot" aria-hidden="true"></span>
           <span id="storage-status">草稿已保存到本机</span>
           <div class="mobile-view-switch" role="group" aria-label="移动端视图">
@@ -213,6 +220,62 @@
             <span><kbd>Alt</kbd><kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> 切换视图</span>
             <span>输入 <kbd>@</kbd> 自动补全标签</span>
           </div>
+        </section>
+      </div>
+    </dialog>
+
+    <dialog class="guide-dialog info-dialog" id="info-dialog" aria-labelledby="info-title">
+      <div class="dialog-head">
+        <div>
+          <span class="dialog-kicker">CoDices · <span id="info-version">v0.3.1</span></span>
+          <h2 id="info-title">更新日志与关于</h2>
+          <p>版本变化、项目说明与版权信息。</p>
+        </div>
+        <button class="icon-button" id="btn-info-close" type="button" title="关闭" aria-label="关闭更新日志与关于">
+          <span data-icon="x"></span>
+        </button>
+      </div>
+      <div class="info-tabs" role="tablist" aria-label="信息页面">
+        <button class="info-tab is-active" id="tab-changelog" data-info-tab="changelog" type="button" role="tab" aria-selected="true" aria-controls="info-changelog">
+          更新日志
+        </button>
+        <button class="info-tab" id="tab-about" data-info-tab="about" type="button" role="tab" aria-selected="false" aria-controls="info-about" tabindex="-1">
+          关于
+        </button>
+      </div>
+      <div class="dialog-body info-body">
+        <section class="info-page" id="info-changelog" data-info-page="changelog" role="tabpanel" aria-labelledby="tab-changelog">
+          <div class="changelog-content" id="changelog-content"></div>
+        </section>
+        <section class="info-page" id="info-about" data-info-page="about" role="tabpanel" aria-labelledby="tab-about" hidden>
+          <div class="about-grid">
+            <article class="about-card">
+              <span class="guide-badge">workflow</span>
+              <h3>写作即排版</h3>
+              <p>左侧用纯 Markdown 记录模组，右侧实时编译为可折叠、可检索、可交叉跳转的交互式 H5。</p>
+            </article>
+            <article class="about-card">
+              <span class="guide-badge">local-first</span>
+              <h3>数据留在本机</h3>
+              <p>草稿保存在浏览器 localStorage 中，不会上传到服务器。清除浏览器数据前请先导出 Markdown 或 H5。</p>
+            </article>
+            <article class="about-card">
+              <span class="guide-badge">export</span>
+              <h3>单文件交付</h3>
+              <p>导出的 H5 自带样式、脚本、目录与索引导航，不依赖外部资源，适合直接分发给调查员或守密人。</p>
+            </article>
+            <article class="about-card">
+              <span class="guide-badge">stack</span>
+              <h3>技术栈</h3>
+              <p>CodeMirror 6 提供源码编辑体验，markdown-it 负责解析，Vite 负责构建与静态部署。</p>
+            </article>
+          </div>
+          <div class="about-meta">
+            <span>版本 <b data-app-version>v0.3.1</b></span>
+            <span>静态部署 · 无后端</span>
+            <span>技术致谢 CodeMirror · markdown-it · Vite</span>
+          </div>
+          <p class="about-copyright">© 2026 CoDices · TRPG 模组工坊。模组内容的版权归其原作者所有。</p>
         </section>
       </div>
     </dialog>

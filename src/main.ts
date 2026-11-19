@@ -1,6 +1,9 @@
 import './styles.css';
 import sampleSource from './sample.md?raw';
-import { compileScenario, escapeHtml, type CompiledDocument } from './compiler/compiler';
+import changelogSource from '../CHANGELOG.md?raw';
+import { version as APP_VERSION } from '../package.json';
+import MarkdownIt from 'markdown-it';
+import { compileScenario, escapeHtml, type AnchorInfo, type CompiledDocument } from './compiler/compiler';
 import { renderPage } from './compiler/render';
 import type { Diagnostic } from '@codemirror/lint';
 import { createEditor, type CursorInfo, type ScenarioEditor } from './editor/editor';
@@ -15,6 +18,7 @@ const STORAGE = {
   split: 'CoDices:split',
   view: 'CoDices:view',
   backup: 'CoDices:backup',
+  sync: 'CoDices:scroll-sync',
 };
 
 const NEW_DOCUMENT = `---
@@ -152,7 +156,16 @@ const toastHost = document.getElementById('toast-host') as HTMLDivElement;
 const dropOverlay = document.getElementById('drop-overlay') as HTMLDivElement;
 const fileInput = document.getElementById('file-input') as HTMLInputElement;
 const btnDevice = document.getElementById('btn-device') as HTMLButtonElement;
+const btnSync = document.getElementById('btn-sync') as HTMLButtonElement;
 const btnRestore = document.getElementById('btn-restore') as HTMLButtonElement;
+const btnInfo = document.getElementById('btn-info') as HTMLButtonElement;
+const infoDialog = document.getElementById('info-dialog') as HTMLDialogElement;
+const changelogContent = document.getElementById('changelog-content') as HTMLDivElement;
+const infoVersion = document.getElementById('info-version') as HTMLSpanElement;
+
+const changelogRenderer = new MarkdownIt({ html: false, linkify: true });
+const changelogHtml = changelogRenderer.render(changelogSource);
+const wideLayoutQuery = window.matchMedia('(min-width: 861px)');
 
 let editor: ScenarioEditor | null = null;
 let currentDoc: CompiledDocument | null = null;
@@ -169,6 +182,20 @@ let pendingScroll: number | null = 0;
 let deviceMode = false;
 let dragDepth = 0;
 let lastMobile = window.matchMedia('(max-width: 860px)').matches;
+let scrollSyncSource: 'editor' | 'preview' | null = null;
+let scrollSyncTimer: number | null = null;
+let suppressPreviewSyncUntil = 0;
+let disposeEditorScroll: (() => void) | null = null;
+let scrollSyncEnabled = true;
+const anchorLines = new Map<string, number>();
+
+interface PreviewScrollPayload {
+  y: number;
+  ratio?: number;
+  anchor?: string | null;
+  next?: string | null;
+  progress?: number;
+}
 
 function readStorage(key: string): string | null {
   try {
@@ -255,6 +282,145 @@ function postThemeToPreview(): void {
   postToPreview({ type: 'CoDices:theme', theme });
 }
 
+function scrollSyncActive(): boolean {
+  // The mobile layout shows one pane at a time, so there is nothing to sync.
+  return scrollSyncEnabled && currentView === 'split' && wideLayoutQuery.matches;
+}
+
+function anchorTargetForLine(line: number): {
+  anchor: string | null;
+  next: string | null;
+  progress: number;
+  ratio: number;
+} {
+  const anchors = currentDoc?.anchors ?? [];
+  const ratio = editor?.getScrollRatio() ?? 0;
+  if (!anchors.length) return { anchor: null, next: null, progress: 0, ratio };
+
+  let previous: AnchorInfo | null = null;
+  let next: AnchorInfo | null = null;
+  for (const anchor of anchors) {
+    if (anchor.line <= line) previous = anchor;
+    else {
+      next = anchor;
+      break;
+    }
+  }
+
+  const fromLine = previous ? previous.line : 0;
+  const lastLine = Math.max(0, (editor?.getLineCount() ?? 1) - 1);
+  const toLine = next ? next.line : Math.max(fromLine + 1, lastLine);
+  const progress = toLine > fromLine
+    ? Math.max(0, Math.min(1, (line - fromLine) / (toLine - fromLine)))
+    : 0;
+
+  return {
+    anchor: previous?.id ?? null,
+    next: next?.id ?? null,
+    progress,
+    ratio,
+  };
+}
+
+function previewStateToTarget(
+  state: PreviewScrollPayload,
+): { from: number; to: number; progress: number } | null {
+  const anchors = currentDoc?.anchors;
+  if (!anchors?.length) return null;
+  // Both null means the preview could not resolve any visible anchor (for
+  // example when everything is hidden by the filter); use the ratio fallback.
+  if (state.anchor === null && state.next === null) return null;
+
+  const resolve = (value: string | null | undefined): number | null => {
+    if (value === null) return -1;
+    if (typeof value !== 'string') return null;
+    return anchorLines.get(value) ?? null;
+  };
+  const from = resolve(state.anchor);
+  const to = resolve(state.next);
+  if (from === null || to === null) return null;
+
+  const lastLine = Math.max(0, (editor?.getLineCount() ?? 1) - 1);
+  const progress = typeof state.progress === 'number' && Number.isFinite(state.progress)
+    ? Math.max(0, Math.min(1, state.progress))
+    : 0;
+  return {
+    from: from < 0 ? 0 : from,
+    to: to < 0 ? lastLine : to,
+    progress,
+  };
+}
+
+function handlePreviewScroll(state: PreviewScrollPayload): void {
+  previewScroll = state.y;
+  if (
+    !scrollSyncActive()
+    || scrollSyncSource === 'editor'
+    || Date.now() < suppressPreviewSyncUntil
+  ) {
+    return;
+  }
+
+  const target = previewStateToTarget(state);
+  if (target) {
+    markScrollSource('preview');
+    editor?.scrollToLine(target.from, target.to, target.progress);
+    return;
+  }
+
+  if (typeof state.ratio === 'number' && Number.isFinite(state.ratio)) {
+    markScrollSource('preview');
+    editor?.scrollToRatio(state.ratio);
+  }
+}
+
+function syncEditorToPreview(): void {
+  if (!editor || !scrollSyncActive()) return;
+  const target = anchorTargetForLine(editor.getScrollLine());
+  markScrollSource('editor');
+  postToPreview({ type: 'CoDices:scrollToAnchor', ...target });
+}
+
+function markScrollSource(source: 'editor' | 'preview'): void {
+  if (scrollSyncTimer !== null) window.clearTimeout(scrollSyncTimer);
+  scrollSyncSource = source;
+  scrollSyncTimer = window.setTimeout(() => {
+    scrollSyncSource = null;
+    scrollSyncTimer = null;
+  }, 140);
+}
+
+function setupScrollSync(): void {
+  if (!editor) return;
+  disposeEditorScroll?.();
+  disposeEditorScroll = editor.onScroll((state) => {
+    if (!scrollSyncActive() || scrollSyncSource === 'preview') return;
+    const target = anchorTargetForLine(state.line);
+    markScrollSource('editor');
+    postToPreview({ type: 'CoDices:scrollToAnchor', ...target });
+  });
+}
+
+function updateSyncButton(): void {
+  btnSync.innerHTML = icon(scrollSyncEnabled ? 'link' : 'unlink');
+  btnSync.classList.toggle('is-active', scrollSyncEnabled);
+  btnSync.title = scrollSyncEnabled ? '取消滚动同步' : '恢复滚动同步';
+  btnSync.setAttribute('aria-label', scrollSyncEnabled ? '取消滚动同步' : '恢复滚动同步');
+  btnSync.setAttribute('aria-pressed', scrollSyncEnabled ? 'true' : 'false');
+}
+
+function toggleScrollSync(): void {
+  scrollSyncEnabled = !scrollSyncEnabled;
+  writeStorage(STORAGE.sync, scrollSyncEnabled ? '1' : '0');
+  updateSyncButton();
+  if (scrollSyncEnabled) {
+    syncEditorToPreview();
+    toast('已恢复编辑与预览同步');
+  } else {
+    toast('已取消编辑与预览同步');
+  }
+}
+
 function updateCursor(info: CursorInfo): void {
   const selected = info.selected ? `，选中 ${info.selected} 字` : '';
   cursorStatus.textContent = `行 ${info.line}，列 ${info.column}${selected}`;
@@ -338,6 +504,8 @@ function compileNow(initial = false): void {
   try {
     const doc = compileScenario(source);
     currentDoc = doc;
+    anchorLines.clear();
+    for (const anchor of doc.anchors) anchorLines.set(anchor.id, anchor.line);
     lastDiagnostics = unresolvedDiagnostics(source, doc);
     editor.setDiagnostics(lastDiagnostics);
     updateDocMeta(doc);
@@ -347,6 +515,9 @@ function compileNow(initial = false): void {
     previewError.hidden = true;
     pendingScroll = initial ? 0 : previewScroll;
     if (initial) previewScroll = 0;
+    // Content just changed under the reader; do not mirror the old preview
+    // scroll position back into the editor while the new document settles.
+    suppressPreviewSyncUntil = Date.now() + 320;
     previewFrame.srcdoc = renderPage(doc, { theme, scrollY: pendingScroll });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -360,13 +531,34 @@ function setupPreviewFrame(): void {
   // theme updates travel via postMessage instead of touching the frame DOM.
   window.addEventListener('message', (event) => {
     if (event.source !== previewFrame.contentWindow) return;
-    const data = event.data as { type?: unknown; y?: unknown } | null;
-    if (data?.type === 'CoDices:scroll' && typeof data.y === 'number' && Number.isFinite(data.y)) {
-      previewScroll = data.y;
+    const data = event.data as {
+      type?: unknown;
+      y?: unknown;
+      ratio?: unknown;
+      anchor?: unknown;
+      next?: unknown;
+      progress?: unknown;
+    } | null;
+    if (
+      data?.type !== 'CoDices:scroll'
+      || typeof data.y !== 'number'
+      || !Number.isFinite(data.y)
+    ) {
+      return;
     }
+    handlePreviewScroll({
+      y: data.y,
+      ratio: typeof data.ratio === 'number' ? data.ratio : undefined,
+      anchor: data.anchor === null || typeof data.anchor === 'string' ? data.anchor : undefined,
+      next: data.next === null || typeof data.next === 'string' ? data.next : undefined,
+      progress: typeof data.progress === 'number' ? data.progress : undefined,
+    });
   });
 
   previewFrame.addEventListener('load', () => {
+    // Ignore the load-time scroll echo; restoring the old position must not
+    // drag the editor along with it.
+    suppressPreviewSyncUntil = Date.now() + 320;
     postThemeToPreview();
     if (pendingScroll !== null) {
       postToPreview({ type: 'CoDices:scrollTo', y: pendingScroll });
@@ -406,6 +598,7 @@ function setView(view: 'editor' | 'split' | 'preview', persist = true): void {
 
   window.requestAnimationFrame(() => {
     editor?.view.requestMeasure();
+    if (scrollSyncActive()) syncEditorToPreview();
   });
 }
 
@@ -541,6 +734,33 @@ function renderGuide(): void {
 
 function openGuide(): void {
   if (!guideDialog.open) guideDialog.showModal();
+}
+
+type InfoTab = 'changelog' | 'about';
+
+function setInfoTab(tab: InfoTab): void {
+  document.querySelectorAll<HTMLButtonElement>('[data-info-tab]').forEach((button) => {
+    const active = button.dataset.infoTab === tab;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+    button.tabIndex = active ? 0 : -1;
+  });
+  document.querySelectorAll<HTMLElement>('[data-info-page]').forEach((page) => {
+    page.hidden = page.dataset.infoPage !== tab;
+  });
+}
+
+function openInfo(tab: InfoTab = 'changelog'): void {
+  setInfoTab(tab);
+  if (!infoDialog.open) infoDialog.showModal();
+}
+
+function renderInfo(): void {
+  changelogContent.innerHTML = changelogHtml;
+  infoVersion.textContent = `v${APP_VERSION}`;
+  document.querySelectorAll<HTMLElement>('[data-app-version]').forEach((element) => {
+    element.textContent = `v${APP_VERSION}`;
+  });
 }
 
 function toast(message: string, kind: 'info' | 'success' | 'warning' | 'error' = 'info'): void {
@@ -783,6 +1003,18 @@ function setupHeaderActions(): void {
   document.getElementById('btn-guide')?.addEventListener('click', openGuide);
   document.getElementById('btn-guide-close')?.addEventListener('click', () => guideDialog.close());
 
+  btnInfo.addEventListener('click', () => openInfo('changelog'));
+  document.getElementById('btn-info-close')?.addEventListener('click', () => infoDialog.close());
+  document.querySelectorAll<HTMLButtonElement>('[data-info-tab]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const tab = button.dataset.infoTab;
+      if (tab === 'changelog' || tab === 'about') setInfoTab(tab);
+    });
+  });
+  infoDialog.addEventListener('click', (event) => {
+    if (event.target === infoDialog) infoDialog.close();
+  });
+
   btnRestore.addEventListener('click', restoreBackup);
   document.getElementById('btn-sample')?.addEventListener('click', loadSample);
   document.getElementById('btn-new')?.addEventListener('click', newDocument);
@@ -795,6 +1027,7 @@ function setupHeaderActions(): void {
   });
   document.getElementById('btn-popout')?.addEventListener('click', popoutPreview);
   btnDevice.addEventListener('click', toggleDeviceMode);
+  btnSync.addEventListener('click', toggleScrollSync);
   btnTheme.addEventListener('click', () => applyTheme(theme === 'dark' ? 'light' : 'dark'));
 
   fileInput.addEventListener('change', () => {
@@ -924,15 +1157,18 @@ function setupHeaderActions(): void {
       updateViewButtons();
       window.requestAnimationFrame(() => editor?.view.requestMeasure());
     }
+    if (scrollSyncActive()) syncEditorToPreview();
   });
 }
 
 function init(): void {
   hydrateIcons();
+  scrollSyncEnabled = readStorage(STORAGE.sync) !== '0';
   theme = initialTheme();
   splitPercent = initialSplit();
   applyTheme(theme, false);
   applySplit(splitPercent);
+  updateSyncButton();
 
   const initial = loadInitialSource();
   source = initial.source;
@@ -940,6 +1176,7 @@ function init(): void {
 
   renderInsertMenu();
   renderGuide();
+  renderInfo();
   setupPreviewFrame();
   setupSplitter();
   setupDropZone();
@@ -959,6 +1196,7 @@ function init(): void {
     },
     onCursor: updateCursor,
   });
+  setupScrollSync();
 
   currentView = initialView();
   setView(currentView, false);
