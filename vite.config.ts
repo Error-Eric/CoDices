@@ -23,6 +23,12 @@ export default defineConfig({
     target: 'es2022',
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        rulebook: 'rulebook/index.html',
+      },
+    },
   },
   test: {
     environment: 'node',

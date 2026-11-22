@@ -3,7 +3,7 @@ import sampleSource from './sample.md?raw';
 import changelogSource from '../CHANGELOG.md?raw';
 import { version as APP_VERSION } from '../package.json';
 import MarkdownIt from 'markdown-it';
-import { compileScenario, escapeHtml, type AnchorInfo, type CompiledDocument } from './compiler/compiler';
+import { compileScenario, escapeHtml, type AnchorInfo, type CompiledDocument, type SkillReference } from './compiler/compiler';
 import { renderPage } from './compiler/render';
 import type { Diagnostic } from '@codemirror/lint';
 import { createEditor, type CursorInfo, type ScenarioEditor } from './editor/editor';
@@ -187,6 +187,7 @@ let scrollSyncTimer: number | null = null;
 let suppressPreviewSyncUntil = 0;
 let disposeEditorScroll: (() => void) | null = null;
 let scrollSyncEnabled = true;
+let skillRefs: SkillReference[] = [];
 const anchorLines = new Map<string, number>();
 
 interface PreviewScrollPayload {
@@ -497,12 +498,34 @@ function scheduleCompile(): void {
   }, 180);
 }
 
+/**
+ * Skill-check hover cards reuse the rulebook dataset generated at build time.
+ * Loading it is best-effort: a clean checkout without `prompts/` has no data,
+ * and the editor simply keeps rendering skill italics normally.
+ */
+async function loadSkillRefs(): Promise<void> {
+  try {
+    const url = `${import.meta.env.BASE_URL}rulebook/rulebook-data.json`;
+    const response = await fetch(url, { cache: 'no-cache' });
+    if (!response.ok) return;
+    const data = await response.json() as {
+      available?: boolean;
+      skills?: SkillReference[];
+    };
+    if (!data.available || !Array.isArray(data.skills) || !data.skills.length) return;
+    skillRefs = data.skills;
+    if (editor) compileNow();
+  } catch {
+    // The rulebook page is optional; keep the editor usable without it.
+  }
+}
+
 function compileNow(initial = false): void {
   if (!editor) return;
   source = editor.getValue();
 
   try {
-    const doc = compileScenario(source);
+    const doc = compileScenario(source, { skills: skillRefs });
     currentDoc = doc;
     anchorLines.clear();
     for (const anchor of doc.anchors) anchorLines.set(anchor.id, anchor.line);
@@ -824,7 +847,7 @@ function saveMarkdown(): void {
 function exportHtml(): void {
   if (!editor) return;
   try {
-    const doc = compileScenario(editor.getValue());
+    const doc = compileScenario(editor.getValue(), { skills: skillRefs });
     const name = `${safeBaseName(doc.title || 'scenario')}.html`;
     download(renderPage(doc), name, 'text/html;charset=utf-8');
     toast(`已导出 ${name}`, 'success');
@@ -836,7 +859,7 @@ function exportHtml(): void {
 function popoutPreview(): void {
   if (!editor) return;
   try {
-    const doc = compileScenario(editor.getValue());
+    const doc = compileScenario(editor.getValue(), { skills: skillRefs });
     const blob = new Blob([renderPage(doc)], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const opened = window.open(url, '_blank');
@@ -1202,6 +1225,7 @@ function init(): void {
   setView(currentView, false);
   updateCharStatus(source);
   compileNow(true);
+  void loadSkillRefs();
   persistDraft();
   if (initial.restored) {
     setSaveState('已恢复本机草稿');

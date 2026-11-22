@@ -6,7 +6,10 @@
   "description": "TRPG scenario Markdown editor and self-contained H5 compiler",
   "scripts": {
     "dev": "vite",
+    "predev": "npm run build:rulebook",
     "build": "tsc --noEmit && vite build",
+    "prebuild": "npm run build:rulebook",
+    "build:rulebook": "node scripts/build-rulebook.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

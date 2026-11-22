@@ -209,6 +209,83 @@ describe('TRPG blocks', () => {
   });
 });
 
+describe('skill checks', () => {
+  const skills = [
+    {
+      id: 'skill-1',
+      name: '侦查',
+      base: '25%',
+      description: '寻找隐藏的线索、脚印或暗门。',
+    },
+  ];
+
+  it('turns known skill italics into hoverable checks', () => {
+    const doc = compileScenario('进行一次*困难侦查*检定。\n', { skills });
+    expect(doc.bodyHtml).toContain('class="skill-check"');
+    expect(doc.bodyHtml).toContain('data-skill="skill-1"');
+    expect(doc.bodyHtml).toContain('data-skill-difficulty="困难"');
+    expect(doc.bodyHtml).toContain('>困难侦查</span>');
+    expect(doc.skills).toEqual([
+      {
+        id: 'skill-1',
+        name: '侦查',
+        base: '25%',
+        description: '寻找隐藏的线索、脚印或暗门。',
+      },
+    ]);
+  });
+
+  it('matches specialty skills and ignores unknown italics', () => {
+    const doc = compileScenario(
+      '*格斗（斗殴）* 与 *困难体质* 都不是同一类。\n',
+      { skills: [{ id: 'skill-2', name: '格斗', base: '视专攻' }] },
+    );
+    expect(doc.bodyHtml).toContain('data-skill="skill-2"');
+    expect(doc.bodyHtml).toContain('<em>困难体质</em>');
+  });
+
+  it('embeds used skills into the generated page', () => {
+    const html = renderPage(compileScenario('*侦查*\n', { skills }));
+    expect(html).toContain('id="skill-data"');
+    expect(html).toContain('寻找隐藏的线索、脚印或暗门。');
+    expect(html).toContain('class="skill-check"');
+  });
+});
+
+describe('character cards', () => {
+  it('extracts numeric and quoted stats from inline code in NPC/Mob cards', () => {
+    const doc = compileScenario([
+      '> NPC：教授',
+      '>',
+      '> 他看起来很紧张。`STR 50` `DEX 60`',
+      '>',
+      '> `STR "=POW"` `移动 "流动 12 / 飞行 70"`',
+      '',
+    ].join('\n'));
+    expect(doc.bodyHtml).toContain('class="char-stat-grid"');
+    expect(doc.bodyHtml).toContain('<span>STR</span><strong>50</strong>');
+    expect(doc.bodyHtml).toContain('<span>DEX</span><strong>60</strong>');
+    expect(doc.bodyHtml).toContain('class="char-meta"');
+    expect(doc.bodyHtml).toContain('<dt>STR</dt><dd>=POW</dd>');
+    expect(doc.bodyHtml).toContain('<dt>移动</dt><dd>流动 12 / 飞行 70</dd>');
+    expect(doc.bodyHtml).not.toContain('<code>STR 50</code>');
+  });
+
+  it('leaves enemy cards and unrelated inline code alone', () => {
+    const doc = compileScenario([
+      '> 敌人：猎犬',
+      '> `STR 50`',
+      '',
+      '> Mob：潜藏者',
+      '> `not a stat`',
+      '',
+    ].join('\n'));
+    expect(doc.bodyHtml).toContain('<code>STR 50</code>');
+    expect(doc.bodyHtml).toContain('<code>not a stat</code>');
+    expect(doc.bodyHtml).not.toContain('char-stat-grid');
+  });
+});
+
 describe('generated page', () => {
   it('is a complete self-contained document', () => {
     const html = renderPage(compileScenario('# Hi\n'));

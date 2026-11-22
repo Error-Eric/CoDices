@@ -28,6 +28,14 @@ const XREF_RE = /@(#?[\p{L}\p{N}\p{M}_-]+(?:#[\p{L}\p{N}\p{M}_-]+)?)/gu;
 const CLUE_TAG_RE = /^\[([^\[\]\s]+)\](?!\()/;
 const ATTRIBUTE_ESCAPE_RE = /[&<>"']/g;
 const TEXT_ESCAPE_RE = /[&<>"']/g;
+const SKILL_DIFFICULTY_RE = /^(常规|困难|极难)\s*[·:：]?\s*/u;
+const SKILL_SPECIALTY_RE = /[（(][^（）()]*[）)]\s*$/u;
+const SKILL_CHECK_SUFFIX_RE = /检定\s*$/u;
+const ENTITY_STAT_NUMBER_RE =
+  /^\s*([A-Za-z\u4e00-\u9fff][A-Za-z0-9\u4e00-\u9fff· _-]{0,15}?)\s*[:：=]?\s*([-+]?\d+(?:\.\d+)?%?)\s*$/u;
+const ENTITY_STAT_QUOTED_RE =
+  /^\s*([A-Za-z\u4e00-\u9fff][A-Za-z0-9\u4e00-\u9fff· _-]{0,15}?)\s*[:：=]?\s*["“](.*?)["”]\s*$/u;
+const ENTITY_SEPARATOR_RE = /^[\s,，、;；/|·。！？.!?]*$/u;
 
 const PREVIEW_LIMIT = 80;
 
@@ -145,6 +153,30 @@ export interface CompileStats {
   characters: number;
 }
 
+/** Minimal rulebook skill data used by skill-check hover cards. */
+export interface SkillReference {
+  id: string;
+  name: string;
+  base?: string;
+  description?: string;
+}
+
+/** Skill data embedded into a compiled document for its hover cards. */
+export interface CompiledSkillRef {
+  id: string;
+  name: string;
+  base: string;
+  description: string;
+}
+
+export interface CompileOptions {
+  /**
+   * Rulebook skills used to recognise `*困难侦查*` skill checks. When omitted,
+   * italics are rendered normally.
+   */
+  skills?: SkillReference[];
+}
+
 export interface CompiledDocument {
   title: string;
   meta: FrontMatter;
@@ -157,6 +189,8 @@ export interface CompiledDocument {
   tagKeys: TagKeyInfo[];
   headings: HeadingInfo[];
   anchors: AnchorInfo[];
+  /** Rulebook entries referenced by skill checks, in first-use order. */
+  skills: CompiledSkillRef[];
   stats: CompileStats;
 }
 
@@ -208,6 +242,28 @@ function parseFenceInfo(info: string): { kind: string; tag: string } {
   return { kind, tag };
 }
 
+interface EntityStatMatch {
+  label: string;
+  value: string;
+  quoted: boolean;
+}
+
+/**
+ * Recognise character-card stats written as inline code:
+ * `STR 50`, `力量 70`, `STR "=POW"`, `移动 "流动 12 / 飞行 70"`.
+ */
+function parseEntityStat(text: string): EntityStatMatch | null {
+  const quoted = ENTITY_STAT_QUOTED_RE.exec(text);
+  if (quoted) {
+    return { label: quoted[1].trim(), value: quoted[2], quoted: true };
+  }
+  const number = ENTITY_STAT_NUMBER_RE.exec(text);
+  if (number) {
+    return { label: number[1].trim(), value: number[2], quoted: false };
+  }
+  return null;
+}
+
 function firstLineSplit(children: Token[]): [Token[], Token[]] {
   for (let i = 0; i < children.length; i += 1) {
     const token = children[i];
@@ -251,6 +307,8 @@ class Compiler {
   private readonly fenceMeta = new Map<Token, FenceMeta>();
   private readonly blockquoteMeta = new Map<Token, BlockquoteMeta>();
   private readonly clueMeta = new Map<Token, ClueMeta>();
+  private readonly skillByName = new Map<string, SkillReference>();
+  private readonly usedSkills = new Map<string, CompiledSkillRef>();
 
   private readonly indexNpc: TagEntry[] = [];
   private readonly indexMonster: TagEntry[] = [];
@@ -258,10 +316,16 @@ class Compiler {
   private readonly locations: Array<{ title: string; id: string; preview: string }> = [];
   private readonly unresolved = new Set<string>();
 
-  constructor() {
+  constructor(options: CompileOptions = {}) {
     this.md = new MarkdownIt('commonmark');
     this.md.enable('table');
     this.md.enable('strikethrough');
+
+    for (const skill of options.skills ?? []) {
+      const name = skill.name?.trim();
+      if (!name) continue;
+      this.skillByName.set(name.toLowerCase(), skill);
+    }
   }
 
   compile(source: string): CompiledDocument {
@@ -292,6 +356,7 @@ class Compiler {
       tagKeys: this.registry.keys(),
       headings: this.headings,
       anchors: [...this.anchors].sort((a, b) => a.line - b.line),
+      skills: [...this.usedSkills.values()],
       stats: {
         headings: this.headings.length,
         aloud: this.aloudCount,
@@ -745,7 +810,9 @@ class Compiler {
 
   private renderSpecialBlockquote(meta: BlockquoteMeta, inlineTokens: Token[]): string {
     const { entry, kind } = meta;
-    const content = this.renderBlockquoteContent(inlineTokens);
+    const content = kind === 'npc' || kind === 'mob'
+      ? this.renderEntityContent(inlineTokens)
+      : this.renderBlockquoteContent(inlineTokens);
     const name = escapeAttr(entry.label);
     const copySource = escapeAttr(meta.copy);
 
@@ -780,6 +847,58 @@ class Compiler {
     );
   }
 
+  /**
+   * NPC / Mob cards pull character stats out of inline code. Numeric values
+   * become compact stat chips; quoted values become raw meta rows.
+   */
+  private renderEntityContent(inlineTokens: Token[]): string {
+    const stats: Array<[string, string]> = [];
+    const meta: Array<[string, string]> = [];
+    const paragraphs: string[] = [];
+
+    for (const chunk of this.blockquoteContentChunks(inlineTokens)) {
+      const kept: Token[] = [];
+      for (const token of chunk) {
+        if (token.type === 'code_inline') {
+          const match = parseEntityStat(token.content);
+          if (match) {
+            if (match.quoted) meta.push([match.label, match.value]);
+            else stats.push([match.label, match.value]);
+            continue;
+          }
+        }
+        kept.push(token);
+      }
+
+      if (!kept.length) continue;
+      const text = this.plain(kept);
+      if (!text.trim() || ENTITY_SEPARATOR_RE.test(text)) continue;
+      const html = this.renderInline(kept, true);
+      if (html) paragraphs.push(`<p>${html}</p>`);
+    }
+
+    const statHtml = stats.length
+      ? '<div class="char-stat-grid">'
+        + stats.map(([label, value]) => (
+          '<div class="char-stat">'
+          + `<span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong>`
+          + '</div>'
+        )).join('')
+        + '</div>'
+      : '';
+    const metaHtml = meta.length
+      ? '<dl class="char-meta">'
+        + meta.map(([label, value]) => (
+          '<div class="char-meta-row">'
+          + `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`
+          + '</div>'
+        )).join('')
+        + '</dl>'
+      : '';
+
+    return `${paragraphs.join('\n')}${statHtml}${metaHtml}`;
+  }
+
   private renderBlockquoteContent(inlineTokens: Token[]): string {
     return this.blockquoteContentChunks(inlineTokens)
       .filter((chunk) => this.plain(chunk).trim().length > 0)
@@ -810,8 +929,22 @@ class Compiler {
           continue;
         }
         out.push(`<code>${escapeHtml(token.content)}</code>`);
-      } else if (type === 'em_open' || type === 'strong_open' || type === 's_open') {
-        out.push(type === 'em_open' ? '<em>' : type === 'strong_open' ? '<strong>' : '<s>');
+      } else if (type === 'em_open') {
+        const close = this.findEmClose(children, i);
+        if (close > i) {
+          const inner = children.slice(i + 1, close);
+          const match = this.matchSkill(this.plain(inner));
+          if (match) {
+            out.push(this.renderSkillCheck(match, inner));
+            i = close + 1;
+            continue;
+          }
+        }
+        out.push('<em>');
+      } else if (type === 'strong_open') {
+        out.push('<strong>');
+      } else if (type === 's_open') {
+        out.push('<s>');
       } else if (type === 'em_close' || type === 'strong_close' || type === 's_close') {
         out.push(type === 'em_close' ? '</em>' : type === 'strong_close' ? '</strong>' : '</s>');
       } else if (type === 'link_open') {
@@ -833,6 +966,59 @@ class Compiler {
       i += 1;
     }
     return out.join('');
+  }
+
+  private findEmClose(children: Token[], start: number): number {
+    let depth = 0;
+    for (let i = start + 1; i < children.length; i += 1) {
+      if (children[i].type === 'em_open') depth += 1;
+      else if (children[i].type === 'em_close') {
+        if (depth === 0) return i;
+        depth -= 1;
+      }
+    }
+    return -1;
+  }
+
+  private matchSkill(text: string): { skill: SkillReference; difficulty: string } | null {
+    if (!this.skillByName.size) return null;
+    let value = text.trim();
+    if (!value) return null;
+
+    let difficulty = '';
+    const diff = SKILL_DIFFICULTY_RE.exec(value);
+    if (diff) {
+      difficulty = diff[1];
+      value = value.slice(diff[0].length).trim();
+    }
+
+    value = value.replace(SKILL_CHECK_SUFFIX_RE, '').trim();
+    value = value.replace(SKILL_SPECIALTY_RE, '').trim();
+    if (!value) return null;
+
+    const skill = this.skillByName.get(value.toLowerCase());
+    return skill ? { skill, difficulty } : null;
+  }
+
+  private renderSkillCheck(
+    match: { skill: SkillReference; difficulty: string },
+    inner: Token[],
+  ): string {
+    const { skill, difficulty } = match;
+    const id = skill.id || skill.name;
+    if (!this.usedSkills.has(id)) {
+      this.usedSkills.set(id, {
+        id,
+        name: skill.name,
+        base: skill.base ?? '',
+        description: trunc(skill.description ?? '', 220),
+      });
+    }
+    const difficultyAttr = difficulty
+      ? ` data-skill-difficulty="${escapeAttr(difficulty)}"`
+      : '';
+    return `<span class="skill-check" tabindex="0" role="note" `
+      + `data-skill="${escapeAttr(id)}"${difficultyAttr}>${this.renderInline(inner)}</span>`;
   }
 
   private renderText(text: string): string {
@@ -1025,6 +1211,6 @@ class Compiler {
   }
 }
 
-export function compileScenario(source: string): CompiledDocument {
-  return new Compiler().compile(source);
+export function compileScenario(source: string, options: CompileOptions = {}): CompiledDocument {
+  return new Compiler(options).compile(source);
 }

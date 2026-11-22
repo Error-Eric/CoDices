@@ -432,6 +432,7 @@ kbd {
   border: 1px solid transparent;
   border-radius: 8px;
   cursor: pointer;
+  text-decoration: none;
   transition:
     color 0.15s,
     background 0.15s,

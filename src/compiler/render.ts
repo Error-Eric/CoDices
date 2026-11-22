@@ -179,6 +179,11 @@ a.xref:hover{background:var(--ref-hover);border-bottom-style:solid}
 .clue{background:var(--chip-bg);border-radius:4px;padding:0 .3rem;color:var(--ink);
   border-bottom:1px dashed var(--accent);cursor:help}
 
+/* ---- skill checks ---- */
+.skill-check{font-style:normal;font-weight:600;color:var(--accent);cursor:help;
+  border-bottom:1px dashed var(--accent);border-radius:2px;padding:0 .06em}
+.skill-check:hover,.skill-check:focus-visible{background:var(--ref-hover);outline:none}
+
 /* ---- blocks (aloud / handout) ---- */
 .block{margin:14px 0;border:1px solid var(--line);border-radius:8px;overflow:hidden;
   background:var(--card);box-shadow:0 1px 3px var(--shadow);scroll-margin-top:64px}
@@ -220,6 +225,20 @@ a.xref:hover{background:var(--ref-hover);border-bottom-style:solid}
   font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei","Heiti SC",sans-serif}
 .entity-body{padding:.5rem .9rem .7rem}
 .entity-body p{margin:.35rem 0}
+.char-stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(3.6rem,1fr));
+  gap:6px;margin:.55rem 0 .2rem}
+.char-stat{display:flex;flex-direction:column;align-items:center;gap:1px;
+  padding:6px 4px 5px;border:1px solid var(--line);border-radius:6px;background:var(--pushbox-bg)}
+.char-stat span{color:var(--muted);font-size:.6rem;font-weight:700;letter-spacing:.09em;
+  font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei","Heiti SC",sans-serif}
+.char-stat strong{color:var(--ink);font-size:.92rem;font-variant-numeric:tabular-nums;
+  line-height:1.3;white-space:nowrap}
+.char-meta{display:grid;margin:.55rem 0 0;border-top:1px solid var(--line)}
+.char-meta-row{display:grid;grid-template-columns:5.2em minmax(0,1fr);gap:.6rem;
+  padding:.35rem 0;border-bottom:1px dotted var(--line)}
+.char-meta-row:last-child{border-bottom:0}
+.char-meta-row dt{color:var(--muted);font-size:.72rem;letter-spacing:.04em;white-space:nowrap}
+.char-meta-row dd{margin:0;color:var(--ink);font-size:.86rem;line-height:1.6;white-space:pre-wrap}
 .type-npc-entity{border-left:4px solid #7a3b1f}
 .type-myth-entity{border-left:4px solid #a02020}
 
@@ -239,6 +258,7 @@ a.xref:hover{background:var(--ref-hover);border-bottom-style:solid}
   box-shadow:0 4px 14px rgba(0,0,0,.45)}
 #tooltip .tip-name{font-weight:bold;color:var(--tooltip-name);margin-bottom:.25rem}
 #tooltip .tip-preview{color:var(--tooltip-fg);opacity:.9;white-space:pre-wrap}
+#tooltip .tip-base{color:var(--tooltip-muted);font-size:.78rem;margin-top:.3rem}
 #tooltip .tip-pager{color:var(--tooltip-muted);font-size:.78rem;margin-top:.3rem}
 #tooltip .tip-go{margin-top:.5rem;border:1px solid var(--tooltip-name);background:transparent;
   color:var(--tooltip-name);border-radius:5px;padding:2px 12px;cursor:pointer;font-size:.8rem;
@@ -289,6 +309,11 @@ const SCRIPT = String.raw`
   var root = document.documentElement;
   var tip = document.getElementById("tooltip");
   var isTouch = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
+  var skillData = {};
+  var skillNode = document.getElementById("skill-data");
+  if (skillNode) {
+    try { skillData = JSON.parse(skillNode.textContent || "{}"); } catch (e) { skillData = {}; }
+  }
 
   // ---- theme ---------------------------------------------------------
   function setTheme(mode) {
@@ -533,6 +558,34 @@ const SCRIPT = String.raw`
   }
   function hideTip() { if (tip) tip.style.display = "none"; }
 
+  function showSkillTip(el) {
+    if (!tip) return;
+    var skill = skillData[el.getAttribute("data-skill") || ""];
+    if (!skill) return;
+    var difficulty = el.getAttribute("data-skill-difficulty") || "";
+    tip.innerHTML =
+      '<div class="tip-name"></div><div class="tip-preview"></div>' +
+      (skill.base ? '<div class="tip-base"></div>' : "");
+    tip.querySelector(".tip-name").textContent =
+      (difficulty ? difficulty + " · " : "") + (skill.name || "");
+    tip.querySelector(".tip-preview").textContent = skill.description || "";
+    var base = tip.querySelector(".tip-base");
+    if (base) base.textContent = "基础值 " + skill.base;
+    tip.style.display = "block";
+    positionTip(el);
+  }
+
+  document.querySelectorAll(".skill-check").forEach(function (el) {
+    el.addEventListener("mouseenter", function () { showSkillTip(el); });
+    el.addEventListener("mouseleave", hideTip);
+    el.addEventListener("focus", function () { showSkillTip(el); });
+    el.addEventListener("blur", hideTip);
+    el.addEventListener("click", function (event) {
+      event.preventDefault();
+      showSkillTip(el);
+    });
+  });
+
   // ---- jump & highlight ----------------------------------------------
   function jumpToId(id) {
     var target = document.getElementById(id);
@@ -641,7 +694,7 @@ const SCRIPT = String.raw`
     if (!isTouch || !tip) return;
     var target = event.target;
     if (!(target instanceof Element)) return;
-    if (!tip.contains(target) && !target.closest(".xref")) {
+    if (!tip.contains(target) && !target.closest(".xref") && !target.closest(".skill-check")) {
       hideTip();
       document.querySelectorAll(".xref[data-card-open]").forEach(function (link) {
         link.removeAttribute("data-card-open");
@@ -856,6 +909,12 @@ export function renderPage(doc: CompiledDocument, options: RenderOptions = {}): 
   const scrollScript = restoreScroll === null
     ? ''
     : `<script>try{var r=document.documentElement;r.style.scrollBehavior="auto";window.scrollTo(0,${restoreScroll});r.style.scrollBehavior="";}catch(e){}</script>`;
+  const skillData = doc.skills.length
+    ? Object.fromEntries(doc.skills.map((skill) => [skill.id, skill]))
+    : null;
+  const skillScript = skillData
+    ? `<script type="application/json" id="skill-data">${JSON.stringify(skillData).replace(/</g, '\\u003c')}</script>`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="zh-CN"${themeAttr}>
@@ -882,6 +941,7 @@ ${doc.indexHtml}
 <div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
 <button class="sidebar-fab" id="sidebar-fab" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="打开目录">☰ 目录</button>
 <div id="tooltip" role="tooltip"></div>
+${skillScript}
 ${scrollScript}
 <script>${SCRIPT}</script>
 </body>

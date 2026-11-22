@@ -23,6 +23,8 @@
 
 - 两遍解析的 `@tag` 交叉引用，前向引用可用，多目标支持滚轮切换
 - `aloud` / `kp_notice` / NPC / Mob / 敌人卡片，折叠、复制、悬浮预览
+- `*困难侦查*` 技能检定悬浮卡：显示规则书技能简述与基础值，并内嵌到导出的 H5
+- NPC / Mob 角色卡自动整理行内代码中的数值：`STR 50` 成为属性格，`移动 "流动 12 / 飞行 70"` 成为原样说明行
 - 行内线索、章节引用、Handout 与图片
 - 自动生成 NPC / 怪物 / 线索 / 地点索引
 - 顶栏按名称或类型筛选、明暗切换、阅读进度条、主题化细滚动条
@@ -44,11 +46,21 @@ npm run dev
 常用命令：
 
 ```bash
-npm test          # 编译器单元测试
-npm run typecheck # TypeScript 类型检查
-npm run build     # 类型检查 + 生产构建到 dist/
-npm run preview   # 本地预览 dist/ 构建结果
+npm test             # 编译器单元测试
+npm run typecheck    # TypeScript 类型检查
+npm run build        # 类型检查 + 生产构建到 dist/
+npm run preview      # 本地预览 dist/ 构建结果
+npm run build:rulebook # 单独生成规则书数据
 ```
+
+## 规则书速查
+
+`/rulebook/` 是一个独立的中文速查页，包含技能、怪物与武器表。它的数据在构建时从本地的 `prompts/rulebook` 中文转录生成，不经过模组编译器：
+
+- `npm run build:rulebook` 读取 `prompts/rulebook`，生成 `public/rulebook/rulebook-data.json`。
+- `npm run dev` 与 `npm run build` 会先自动执行生成脚本。
+- 技能与怪物卡片默认截断长说明，点击后在悬浮层中查看完整内容。
+- `prompts/` 与生成的数据文件都不进入版本库；没有源文本时脚本写入空载荷，页面显示“数据未生成”，公开构建不会包含规则书原文。
 
 ## 使用
 
@@ -106,10 +118,13 @@ Vite 使用相对资源路径（`base: './'`），因此项目站点路径和自
 src/
   compiler/       Markdown → 自包含 H5 编译器与页面渲染
   editor/         CodeMirror 配置、TRPG 高亮、补全、诊断、片段
+  rulebook/       规则书速查页的渲染逻辑与样式
   ui/             内联 SVG 图标
   main.ts         编辑器应用状态、持久化、导入导出与交互
   styles.css      应用界面样式与响应式布局
   sample.md       内置示例模组
+rulebook/         规则书速查页的 Vite MPA 入口
+scripts/          构建期数据生成脚本
 tests/            编译器单元测试
 public/           favicon 等静态资源
 syntax.md         模组语法契约
