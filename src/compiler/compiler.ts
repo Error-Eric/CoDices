@@ -37,6 +37,15 @@ const ENTITY_STAT_QUOTED_RE =
   /^\s*([A-Za-z\u4e00-\u9fff][A-Za-z0-9\u4e00-\u9fff· _-]{0,15}?)\s*[:：=]?\s*["“](.*?)["”]\s*$/u;
 const ENTITY_SEPARATOR_RE = /^[\s,，、;；/|·。！？.!?]*$/u;
 
+/**
+ * CoC characteristics get compact stat chips. Everything else (derived or
+ * custom values such as HP, MP, SAN, DB, 移动, 护甲) becomes a meta row.
+ */
+const STANDARD_ATTRIBUTES = new Set([
+  'STR', 'CON', 'SIZ', 'DEX', 'INT', 'POW', 'APP', 'EDU', 'LUCK', 'LCK', 'CHR',
+  '力量', '体质', '体型', '敏捷', '智力', '意志', '外貌', '教育', '幸运', '魅力',
+]);
+
 const PREVIEW_LIMIT = 80;
 
 const NPC_PREFIX: Record<string, string> = {
@@ -245,7 +254,6 @@ function parseFenceInfo(info: string): { kind: string; tag: string } {
 interface EntityStatMatch {
   label: string;
   value: string;
-  quoted: boolean;
 }
 
 /**
@@ -255,13 +263,17 @@ interface EntityStatMatch {
 function parseEntityStat(text: string): EntityStatMatch | null {
   const quoted = ENTITY_STAT_QUOTED_RE.exec(text);
   if (quoted) {
-    return { label: quoted[1].trim(), value: quoted[2], quoted: true };
+    return { label: quoted[1].trim(), value: quoted[2] };
   }
   const number = ENTITY_STAT_NUMBER_RE.exec(text);
   if (number) {
-    return { label: number[1].trim(), value: number[2], quoted: false };
+    return { label: number[1].trim(), value: number[2] };
   }
   return null;
+}
+
+function isStandardAttribute(label: string): boolean {
+  return STANDARD_ATTRIBUTES.has(label.trim().toUpperCase());
 }
 
 function firstLineSplit(children: Token[]): [Token[], Token[]] {
@@ -810,9 +822,9 @@ class Compiler {
 
   private renderSpecialBlockquote(meta: BlockquoteMeta, inlineTokens: Token[]): string {
     const { entry, kind } = meta;
-    const content = kind === 'npc' || kind === 'mob'
-      ? this.renderEntityContent(inlineTokens)
-      : this.renderBlockquoteContent(inlineTokens);
+    const content = kind === 'kp_notice'
+      ? this.renderBlockquoteContent(inlineTokens)
+      : this.renderEntityContent(inlineTokens);
     const name = escapeAttr(entry.label);
     const copySource = escapeAttr(meta.copy);
 
@@ -848,8 +860,8 @@ class Compiler {
   }
 
   /**
-   * NPC / Mob cards pull character stats out of inline code. Numeric values
-   * become compact stat chips; quoted values become raw meta rows.
+   * Entity cards pull character stats out of inline code. CoC characteristics
+   * become compact stat chips; derived and custom values become meta rows.
    */
   private renderEntityContent(inlineTokens: Token[]): string {
     const stats: Array<[string, string]> = [];
@@ -862,8 +874,8 @@ class Compiler {
         if (token.type === 'code_inline') {
           const match = parseEntityStat(token.content);
           if (match) {
-            if (match.quoted) meta.push([match.label, match.value]);
-            else stats.push([match.label, match.value]);
+            if (isStandardAttribute(match.label)) stats.push([match.label, match.value]);
+            else meta.push([match.label, match.value]);
             continue;
           }
         }

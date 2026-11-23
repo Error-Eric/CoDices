@@ -253,36 +253,42 @@ describe('skill checks', () => {
 });
 
 describe('character cards', () => {
-  it('extracts numeric and quoted stats from inline code in NPC/Mob cards', () => {
+  it('puts CoC characteristics into stat chips and derived/custom values into meta rows', () => {
     const doc = compileScenario([
       '> NPC：教授',
       '>',
-      '> 他看起来很紧张。`STR 50` `DEX 60`',
+      '> 他看起来很紧张。`STR 50` `DEX 60` `力量 70` `LUCK 45` `CHR "=POW"`',
       '>',
-      '> `STR "=POW"` `移动 "流动 12 / 飞行 70"`',
+      '> `STR "=POW"` `HP 10` `DB "+1D4"` `移动 "流动 12 / 飞行 70"` `年龄 35`',
       '',
     ].join('\n'));
     expect(doc.bodyHtml).toContain('class="char-stat-grid"');
     expect(doc.bodyHtml).toContain('<span>STR</span><strong>50</strong>');
     expect(doc.bodyHtml).toContain('<span>DEX</span><strong>60</strong>');
+    expect(doc.bodyHtml).toContain('<span>力量</span><strong>70</strong>');
+    expect(doc.bodyHtml).toContain('<span>LUCK</span><strong>45</strong>');
+    expect(doc.bodyHtml).toContain('<span>CHR</span><strong>=POW</strong>');
+    expect(doc.bodyHtml).toContain('<span>STR</span><strong>=POW</strong>');
     expect(doc.bodyHtml).toContain('class="char-meta"');
-    expect(doc.bodyHtml).toContain('<dt>STR</dt><dd>=POW</dd>');
+    expect(doc.bodyHtml).toContain('<dt>HP</dt><dd>10</dd>');
+    expect(doc.bodyHtml).toContain('<dt>DB</dt><dd>+1D4</dd>');
     expect(doc.bodyHtml).toContain('<dt>移动</dt><dd>流动 12 / 飞行 70</dd>');
+    expect(doc.bodyHtml).toContain('<dt>年龄</dt><dd>35</dd>');
     expect(doc.bodyHtml).not.toContain('<code>STR 50</code>');
   });
 
-  it('leaves enemy cards and unrelated inline code alone', () => {
+  it('applies to enemy cards and leaves unrelated inline code alone', () => {
     const doc = compileScenario([
       '> 敌人：猎犬',
-      '> `STR 50`',
+      '> `STR 50` `HP 9`',
       '',
       '> Mob：潜藏者',
       '> `not a stat`',
       '',
     ].join('\n'));
-    expect(doc.bodyHtml).toContain('<code>STR 50</code>');
+    expect(doc.bodyHtml).toContain('<span>STR</span><strong>50</strong>');
+    expect(doc.bodyHtml).toContain('<dt>HP</dt><dd>9</dd>');
     expect(doc.bodyHtml).toContain('<code>not a stat</code>');
-    expect(doc.bodyHtml).not.toContain('char-stat-grid');
   });
 });
 
