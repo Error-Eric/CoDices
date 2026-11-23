@@ -84,14 +84,21 @@ img{max-width:100%}
   background:var(--card);color:var(--muted);border-radius:4px;font-family:inherit}
 .sidebar-actions button:hover{color:var(--accent);border-color:var(--accent)}
 .toc-details{margin:.35rem 0}
-.toc-details summary{cursor:pointer;font-weight:bold;color:var(--accent);
+.toc-details summary{display:flex;align-items:center;gap:.35rem;cursor:pointer;font-weight:bold;color:var(--accent);
   font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei","Heiti SC",sans-serif;
   font-size:.8rem;letter-spacing:.04em;list-style:none;user-select:none;
   padding:.15rem .3rem .15rem calc(.3rem + var(--toc-depth,0) * .7rem)}
 .toc-details summary::-webkit-details-marker{display:none}
-.toc-details summary::before{content:'▸ ';display:inline-block;transition:transform .15s}
+.toc-details summary::before{content:'▸ ';display:inline-block;flex:0 0 auto;transition:transform .15s}
 .toc-details[open] summary::before{transform:rotate(90deg)}
+.toc-summary-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toc-jump{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;
+  width:1.25rem;height:1.25rem;border-radius:3px;color:var(--muted);
+  font-size:.72rem;font-weight:normal;line-height:1;text-decoration:none;opacity:.55}
 .toc-details summary:hover{background:var(--hover-bg)}
+.toc-details summary:hover .toc-jump,.toc-jump:focus-visible{opacity:1}
+.toc-jump:hover,.toc-jump:focus-visible{color:var(--accent);background:var(--chip-bg);
+  outline:2px solid var(--keeper-border);outline-offset:1px}
 .toc-link{display:block;color:var(--ink);text-decoration:none;
   border-left:2px solid transparent;font-size:.85rem;
   padding:.12rem .3rem .12rem calc(.3rem + var(--toc-depth,0) * .7rem)}
@@ -629,18 +636,30 @@ const SCRIPT = String.raw`
     jumpToId(targets[indexOf(el)].id);
   }
 
+  function followTocLink(link, event) {
+    var href = link.getAttribute("href") || "";
+    if (href.charAt(0) !== "#") return;
+    event.preventDefault();
+    event.stopPropagation();
+    jumpToId(href.slice(1));
+    // srcdoc iframes cannot rewrite their about:srcdoc URL. Building the
+    // standalone file still gets deep-linkable headings, while previews
+    // simply skip the address-bar update.
+    try {
+      if (history.replaceState) history.replaceState(null, "", href);
+    } catch (e) {}
+    closeSidebar();
+  }
+
+  document.querySelectorAll(".toc-jump").forEach(function (link) {
+    link.addEventListener("click", function (event) {
+      followTocLink(link, event);
+    });
+  });
+
   document.querySelectorAll("a.toc-link").forEach(function (link) {
     link.addEventListener("click", function (event) {
-      var href = link.getAttribute("href") || "";
-      if (href.charAt(0) !== "#") return;
-      event.preventDefault();
-      jumpToId(href.slice(1));
-      // srcdoc iframes cannot rewrite their about:srcdoc URL. Building the
-      // standalone file still gets deep-linkable headings, while previews
-      // simply skip the address-bar update.
-      try {
-        if (history.replaceState) history.replaceState(null, "", href);
-      } catch (e) {}
+      followTocLink(link, event);
     });
   });
 

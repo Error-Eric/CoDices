@@ -57,6 +57,8 @@ describe('headings', () => {
     expect(doc.sidebarHtml).toContain('class="toc-details toc-depth-1"');
     expect(doc.sidebarHtml).toContain('class="toc-link toc-depth-2"');
     expect(doc.sidebarHtml).toContain('--toc-depth:2');
+    expect(doc.sidebarHtml).toContain('class="toc-jump" href="#part"');
+    expect(doc.sidebarHtml).toContain('aria-label="跳到本节：Part"');
   });
 });
 

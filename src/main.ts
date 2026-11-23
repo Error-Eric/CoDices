@@ -19,6 +19,7 @@ const STORAGE = {
   view: 'CoDices:view',
   backup: 'CoDices:backup',
   sync: 'CoDices:scroll-sync',
+  savedAt: 'CoDices:saved-at',
 };
 
 const NEW_DOCUMENT = `---
@@ -221,6 +222,33 @@ function removeStorage(key: string): void {
   } catch {
     // Ignore unavailable storage.
   }
+}
+
+function formatSavedAt(date: Date): string {
+  const now = new Date();
+  const time = date.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  if (date.toDateString() === now.toDateString()) return time;
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return `昨天 ${time}`;
+
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function lastSavedLabel(): string {
+  const raw = readStorage(STORAGE.savedAt);
+  if (!raw) return '';
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? '' : formatSavedAt(date);
 }
 
 function initialTheme(): 'light' | 'dark' {
@@ -460,7 +488,8 @@ function setSaveState(message: string): void {
 
 function markDirty(): void {
   setSaveState('正在编辑…');
-  storageStatus.textContent = '未保存更改';
+  const label = lastSavedLabel();
+  storageStatus.textContent = label ? `未保存更改 · 上次保存 ${label}` : '未保存更改';
 }
 
 function persistDraft(): void {
@@ -474,12 +503,11 @@ function persistDraft(): void {
     return;
   }
 
-  const time = new Date().toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const savedAt = new Date();
+  writeStorage(STORAGE.savedAt, savedAt.toISOString());
+  const time = formatSavedAt(savedAt);
   setSaveState(`已保存 ${time}`);
-  storageStatus.textContent = `草稿已保存到本机 · ${time}`;
+  storageStatus.textContent = `草稿已保存到本机 · 上次保存 ${time}`;
 }
 
 function scheduleDraftSave(): void {
@@ -1162,11 +1190,8 @@ function setupHeaderActions(): void {
   });
 
   window.addEventListener('beforeunload', () => {
-    try {
-      localStorage.setItem(STORAGE.draft, editor?.getValue() ?? source);
-    } catch {
-      // Ignore.
-    }
+    source = editor?.getValue() ?? source;
+    persistDraft();
   });
 
   document.addEventListener('visibilitychange', () => {
@@ -1226,10 +1251,19 @@ function init(): void {
   updateCharStatus(source);
   compileNow(true);
   void loadSkillRefs();
-  persistDraft();
+  if (!initial.restored) persistDraft();
+  const savedLabel = lastSavedLabel();
   if (initial.restored) {
-    setSaveState('已恢复本机草稿');
-    storageStatus.textContent = '草稿已从本机恢复';
+    if (savedLabel) {
+      setSaveState(`上次保存 ${savedLabel}`);
+      storageStatus.textContent = `草稿已从本机恢复 · 上次保存 ${savedLabel}`;
+    } else {
+      setSaveState('已恢复本机草稿');
+      storageStatus.textContent = '草稿已从本机恢复';
+    }
+  } else if (savedLabel) {
+    setSaveState(`已保存 ${savedLabel}`);
+    storageStatus.textContent = `示例已载入 · 上次保存 ${savedLabel}`;
   } else {
     setSaveState('示例已载入');
     storageStatus.textContent = '示例已载入，编辑后自动保存';

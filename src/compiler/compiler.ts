@@ -1153,7 +1153,11 @@ class Compiler {
 
     const links = children.map((child) => this.renderTocNode(child, depth + 1)).join('');
     return `<details class="toc-details ${classes}" style="${depthStyle}" open>`
-      + `<summary>${escapeHtml(node.title)}</summary>${links}</details>`;
+      + '<summary>'
+      + `<span class="toc-summary-label">${escapeHtml(node.title)}</span>`
+      + `<a class="toc-jump" href="#${escapeAttr(node.id)}" title="跳到本节" `
+      + `aria-label="跳到本节：${escapeAttr(node.title)}">↗</a>`
+      + `</summary>${links}</details>`;
   }
 
   // ------------------------------------------------------------------ //
