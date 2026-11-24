@@ -1,12 +1,11 @@
 /**
  * Build the rulebook dataset from the local source texts.
  *
- * `prompts/` is intentionally gitignored: the source chapters are copyrighted
- * and must not be published with the repository. This script therefore reads
- * them only when they are present and emits a small JSON payload for the
- * `/rulebook/` page. When the source is absent (for example in a clean CI
- * checkout) it writes an empty, well-formed payload so the page can show a
- * helpful "not generated" state instead of failing.
+ * The raw transcription under `prompts/` stays out of the repository. The
+ * generated JSON contains only the skill, monster and weapon lookup data and
+ * is committed so the public site can ship the `/rulebook/` page without the
+ * source files. When the source is absent, an existing payload is kept as-is;
+ * a missing payload gets an empty placeholder for the "not generated" state.
  */
 
 import fs from 'node:fs';
@@ -135,7 +134,6 @@ function splitSkillLines(lines) {
       tags: [...new Set(tags)],
       description,
       sections,
-      sourceLine: heading.line + 1,
     });
   }
   return skills;
@@ -484,7 +482,6 @@ function parseMonsters(text) {
     return {
       id: `monster-${index + 1}`,
       ...parsed,
-      sourceLine: monster.start + 1,
     };
   });
 
@@ -1114,13 +1111,19 @@ function build() {
   const appendixText = readText(APPENDIX_FILE);
 
   const available = Boolean(skillsText || monstersText || appendixText);
+  if (!available && fs.existsSync(OUTPUT_FILE)) {
+    console.log(
+      `[rulebook] source not found; keeping ${path.relative(ROOT, OUTPUT_FILE)}`,
+    );
+    return;
+  }
+
   const skills = skillsText ? splitSkillLines(linesOf(skillsText)) : [];
   const monsters = monstersText ? parseMonsters(monstersText) : [];
   const weapons = appendixText ? parseWeapons(appendixText) : [];
 
   const payload = {
     available,
-    generatedAt: new Date().toISOString(),
     source: 'Call of Cthulhu 7e Keeper Rulebook (Chinese transcription)',
     counts: {
       skills: skills.length,

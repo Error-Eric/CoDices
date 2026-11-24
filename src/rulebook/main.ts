@@ -503,13 +503,11 @@ function renderUnavailable(): void {
     <p class="rb-kicker">数据未生成</p>
     <h2>规则书还没有装入这一份构建</h2>
     <p>
-      本页的技能、怪物与武器数据由本地的
-      <code>prompts/rulebook</code> 源文本生成。当前构建里没有找到可用数据，
-      因此不会展示任何规则书原文。
+      本页的技能、怪物与武器数据由 <code>prompts/rulebook</code> 源文本生成。
+      当前构建里没有找到可用数据。
     </p>
     <p>
-      请在包含源文本的工作副本中运行 <code>npm run build:rulebook</code>，
-      然后刷新此页。公开构建可以继续保持这个空状态。
+      请重新生成 <code>public/rulebook/rulebook-data.json</code> 后刷新此页。
     </p>
     <a class="rb-link-button" href="../">返回编辑器</a>
   </section>`;

@@ -61,7 +61,8 @@ npm run build:rulebook # 单独生成规则书数据
 - `npm run build:rulebook` 读取 `prompts/rulebook`，生成 `public/rulebook/rulebook-data.json`。
 - `npm run dev` 与 `npm run build` 会先自动执行生成脚本。
 - 技能与怪物卡片默认截断长说明，点击后在悬浮层中查看完整内容。
-- `prompts/` 与生成的数据文件都不进入版本库；没有源文本时脚本写入空载荷，页面显示“数据未生成”，公开构建不会包含规则书原文。
+- 生成的技能、怪物与武器速查数据会随站点发布；`prompts/` 原始转录仍不进入版本库。
+- 没有源文本时会保留已提交的数据文件；只有数据文件也缺失时才显示“数据未生成”。
 
 ## 使用
 
@@ -110,6 +111,8 @@ system: Call of Cthulhu 7e
 1. 把项目推送到 GitHub 仓库的 `main` 分支。
 2. 在仓库 **Settings → Pages → Build and deployment** 中把 Source 设为 **GitHub Actions**。
 3. 工作流会依次运行测试、构建并发布 `dist/`。
+
+CI 中没有 `prompts/` 源文本，构建会保留仓库里已提交的规则书速查数据，因此 `/rulebook/` 页面会随站点一起发布。
 
 Vite 使用相对资源路径（`base: './'`），因此项目站点路径和自定义域名都可以直接工作，不需要修改资源前缀。
 

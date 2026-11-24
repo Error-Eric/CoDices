@@ -4,4 +4,3 @@ dist/
 .DS_Store
 prompts/
 .AGENT/
-public/rulebook/rulebook-data.json
